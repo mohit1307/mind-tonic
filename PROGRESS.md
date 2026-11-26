@@ -97,28 +97,44 @@
 - [x] Habit Service & Controller with 7-day mini history decoration (`history7Days`)
 - [x] Mounted `/api/habits` routes with JWT authentication
 - [x] Frontend `habitService` API client & `useHabits` custom hook with optimistic updates
-- [x] `HabitCard` component with big checkmark toggle, custom color accents, dynamic Lucide icons, streak flame counter, and 7-day mini history dots
-- [x] `HabitModal` with custom icon selector and color palette
-- [x] `HabitStatsBar` showing active habits, today's check-ins, best streak, and completion rate
+- [x] `HabitCard`, `HabitModal`, `HabitStatsBar` components
 - [x] `HabitProgressChart` powered by Recharts (AreaChart with subtle violet gradient)
 - [x] Dynamic `Dashboard.jsx` integrating live habit streaks and completion percentage
 - [x] End-to-end testing: 0 build errors on frontend, 100% backend Habit tests passed
 
 ---
 
-## Phase 6: AI Personal Assistant (Next)
-**Status:** Pending
+## Phase 6: AI Personal Assistant ✅
+**Status:** Complete
+**Date:** 2026-11-26
 
-### Planned:
-- [ ] AI Service with Gemini / OpenAI API integration
-- [ ] System prompt engineering with structured action schema output
-- [ ] AI Conversation & Message models (`server/models/AIConversation.js`)
-- [ ] Context injection (user's working hours, today's schedule, pending tasks, habit streaks)
-- [ ] Action parser & backend validator (deterministic intent execution)
-- [ ] Read-only query handler (`query_data`) and Confirmation Card handler (`pending_confirmation` -> execute)
-- [ ] AI Assistant Chat UI in `AIAssistant.jsx` with chat bubbles, suggestion pills, and interactive confirmation action cards
+### Completed:
+- [x] AIConversation Mongoose Model (`server/models/AIConversation.js`) with message roles and structured action schemas
+- [x] Live MongoDB Context Injection: User preferences, today's schedule, pending tasks, habit performance
+- [x] Intent Recognition Engine: understands conversational timetable generation, task creation with duration/priority parsing, block shifts/reschedules, habit logging, and data queries
+- [x] Safe Action Confirmation Architecture: write actions require user approval before execution; read queries execute immediately
+- [x] Deterministic Action Service (`server/services/action.service.js`) calling domain services directly
+- [x] Mounted `/api/ai/*` routes (chat, confirm action, reject action, conversation management)
+- [x] Frontend `aiService` API client
+- [x] `ChatBubble` component with user/assistant avatars and markdown text support
+- [x] `ActionCard` component with visual action details and "Confirm & Execute" vs. "Cancel" buttons
+- [x] `SuggestionChips` component for instant one-click prompts
+- [x] Full `AIAssistant.jsx` interface with message history, auto-scroll, clear chat, and real-time execution feedback
+- [x] End-to-end testing: Verified conversational task creation, action confirmation, real DB execution, and 0 frontend build errors
 
 ---
 
-## Phase 7–11: Upcoming
+## Phase 7: Intelligent Missed-Task Rescheduling (Next)
+**Status:** Pending
+
+### Planned:
+- [ ] Missed-task detection engine
+- [ ] Automated scan of user's remaining available waking hours
+- [ ] Alternative slot suggestion generator
+- [ ] Rescheduling suggestion notification / card in Routine & AI Assistant
+- [ ] Approval confirmation flow updating timetable without overwriting fixed commitments
+
+---
+
+## Phase 8–11: Upcoming
 See architecture document for full roadmap.
