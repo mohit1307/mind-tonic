@@ -14,6 +14,7 @@ import {
 import useAuth from '../hooks/useAuth';
 import taskService from '../services/taskService';
 import scheduleService from '../services/scheduleService';
+import habitService from '../services/habitService';
 import Card, { CardHeader, CardTitle } from '../components/common/Card';
 import Button from '../components/common/Button';
 import Badge from '../components/common/Badge';
@@ -22,18 +23,21 @@ import ScheduleBlockCard from '../components/routine/ScheduleBlockCard';
 export default function Dashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
+  const [habitStats, setHabitStats] = useState(null);
   const [todaySchedule, setTodaySchedule] = useState(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
 
   const loadDashboardData = async () => {
     try {
-      const [statsData, scheduleData] = await Promise.all([
+      const [statsData, scheduleData, habitData] = await Promise.all([
         taskService.getStats(),
         scheduleService.getScheduleByDate(new Date()),
+        habitService.getStats(),
       ]);
       setStats(statsData);
       setTodaySchedule(scheduleData);
+      setHabitStats(habitData);
     } catch (err) {
       console.warn('Dashboard data fetch warning:', err.message);
     } finally {
@@ -96,9 +100,9 @@ export default function Dashboard() {
                 View Timetable
               </Button>
             </Link>
-            <Link to="/app/tasks">
+            <Link to="/app/habits">
               <Button variant="secondary" icon={Plus} size="md">
-                Add Task
+                Habit Check-in
               </Button>
             </Link>
           </div>
@@ -149,30 +153,31 @@ export default function Dashboard() {
           </div>
         </Card>
 
+        {/* Live Habit Streak Metric */}
         <Card>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Completed Tasks</span>
-            <div className="p-2 rounded-xl bg-success-500/10 text-success-400">
-              <CheckCircle2 className="w-4 h-4" />
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Best Habit Streak</span>
+            <div className="p-2 rounded-xl bg-warning-500/10 text-warning-400">
+              <Flame className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-white">
-              {stats ? stats.completed : 0}
+              {habitStats ? `${habitStats.bestStreak} Days` : '0 Days'}
             </span>
-            <Badge color="success" size="sm">
-              {stats ? `${stats.completionRate}%` : '0%'}
+            <Badge color="warning" size="sm">
+              {habitStats ? `${habitStats.todayRate}% Today` : 'Active'}
             </Badge>
           </div>
           <div className="mt-2 text-2xs text-slate-500">
-            Completion consistency
+            {habitStats?.totalHabits ? `${habitStats.todayCompleted} of ${habitStats.totalHabits} done today` : 'Track habits daily'}
           </div>
         </Card>
 
         <Card>
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Productivity Score</span>
-            <div className="p-2 rounded-xl bg-warning-500/10 text-warning-400">
+            <div className="p-2 rounded-xl bg-success-500/10 text-success-400">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
@@ -180,7 +185,7 @@ export default function Dashboard() {
             <span className="text-2xl font-bold text-white">
               {stats && stats.total > 0 ? `${stats.completionRate}%` : '100%'}
             </span>
-            <span className="text-xs text-accent-400 font-medium">Optimal</span>
+            <span className="text-xs text-success-400 font-medium">Optimal</span>
           </div>
           <div className="mt-2 text-2xs text-slate-500">
             Daily balance indicator
