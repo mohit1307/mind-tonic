@@ -1,8 +1,34 @@
-import { Brain, User, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { Brain, User, Sparkles, Volume2, VolumeX } from 'lucide-react';
 import ActionCard from './ActionCard';
 
 export default function ChatBubble({ message, onConfirmAction, onRejectAction }) {
   const isUser = message.role === 'user';
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const handleSpeak = () => {
+    if (!('speechSynthesis' in window)) {
+      alert('Speech synthesis is not supported in this browser.');
+      return;
+    }
+
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(message.content);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
 
   return (
     <div className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : ''} animate-fade-in`}>
@@ -36,15 +62,34 @@ export default function ChatBubble({ message, onConfirmAction, onRejectAction })
           />
         )}
 
-        {/* Timestamp */}
+        {/* Footer: Timestamp and TTS Speaker Button */}
         <div
-          className={`text-2xs mt-1.5 ${
-            isUser ? 'text-accent-200 text-right' : 'text-slate-500 text-left'
+          className={`flex items-center justify-between text-2xs mt-2 pt-1 border-t ${
+            isUser
+              ? 'border-white/10 text-accent-200'
+              : 'border-white/5 text-slate-500'
           }`}
         >
-          {message.timestamp
-            ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            : ''}
+          <span>
+            {message.timestamp
+              ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : ''}
+          </span>
+
+          {!isUser && (
+            <button
+              onClick={handleSpeak}
+              className={`p-1 rounded-lg transition-colors flex items-center gap-1 ${
+                isSpeaking
+                  ? 'text-accent-400 bg-accent-500/20'
+                  : 'text-slate-500 hover:text-white hover:bg-white/5'
+              }`}
+              title={isSpeaking ? 'Stop speaking' : 'Read aloud'}
+            >
+              {isSpeaking ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              <span className="text-[10px]">{isSpeaking ? 'Stop' : 'Listen'}</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

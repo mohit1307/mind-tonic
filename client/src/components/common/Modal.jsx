@@ -43,13 +43,13 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md', c
       <div
         className={`
           w-full ${sizeClasses[size]} bg-surface border border-white/10
-          rounded-2xl shadow-2xl animate-slide-up
+          rounded-2xl shadow-2xl animate-slide-up max-h-[90vh] flex flex-col
           ${className}
         `}
       >
         {/* Header */}
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 flex-shrink-0">
             <h2 className="text-lg font-semibold text-slate-100">{title}</h2>
             <button
               onClick={onClose}
@@ -61,7 +61,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md', c
         )}
 
         {/* Content */}
-        <div className="px-6 py-5">{children}</div>
+        <div className="px-6 py-5 overflow-y-auto flex-1">{children}</div>
       </div>
     </div>
   );
