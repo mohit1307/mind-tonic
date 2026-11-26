@@ -142,15 +142,38 @@
 
 ---
 
-## Phase 8: Learning & Study Management (Next)
+## Phase 8: Learning & Study Management ✅
+**Status:** Complete
+**Date:** 2026-11-26
+
+### Completed:
+- [x] SuperMemo SM-2 Spaced Repetition engine (`server/engines/spacedRepetition.js`) calculating optimal review intervals, Easiness Factor ($EF \ge 1.3$), repetitions, and next review dates
+- [x] Subject Mongoose model (`server/models/Subject.js`) with syllabus topics, difficulties, confidence ratings, and embedded SM-2 metadata
+- [x] StudySession Mongoose model (`server/models/StudySession.js`) logging real focus session durations, ratings (1-5), and notes
+- [x] Joi validation schemas for subjects, topics, reviews, and session logs (`server/validators/learning.validator.js`)
+- [x] Learning Service (`server/services/learning.service.js`) with auto-incrementing study minutes, mastery computation, and due card queuing
+- [x] Express routes mounted at `/api/learning` with JWT authentication
+- [x] Frontend `learningService` API client & `useLearning` reactive hook
+- [x] Interactive `StudyTimerModal` with live animated stopwatch (Start / Pause / Reset), focus rating, and direct MongoDB session logging
+- [x] `SubjectCard` with expandable syllabus topic checklist, confidence tags, and progress bar
+- [x] `SubjectModal` & `TopicModal` for syllabus and curriculum management
+- [x] `SpacedReviewCard` active recall interface with answer reveal toggle and 6-level SM-2 quality rating buttons (0 to 5)
+- [x] `LearningAnalyticsChart` powered by Recharts (BarChart of study hours per course)
+- [x] Full tabbed `Learning.jsx` page (Syllabus, Active Recall Queue with badge count, Analytics & Log History)
+- [x] End-to-end testing: 100% backend SM-2 algorithm & service verification passing, 0 frontend build errors (836ms)
+
+---
+
+## Phase 9: Documents & Expense Management (Next)
 **Status:** Pending
 
 ### Planned:
-- [ ] Subject & Topic tracking (syllabus progress, difficulty, confidence level)
-- [ ] Study session timer & logger with focus metrics
-- [ ] Spaced Repetition Engine (SM-2 algorithm) for revision schedules
-- [ ] Active recall review cards
-- [ ] Learning analytics (hours per subject, confidence distribution, revision calendar)
+- [ ] Document Mongoose model with file upload via Multer (receipts, notes, bills, college documents)
+- [ ] Expense Mongoose model with category, amount, payment method, recurring flag, and college fee tracking
+- [ ] Server-side OCR engine (`tesseract.js` / regex parser) extracting amount, merchant, date, and description from uploaded receipts/bills
+- [ ] OCR Review Modal allowing the user to verify/correct extracted data before saving to database
+- [ ] Expense analytics & budget tracking (spending by category, monthly breakdown)
+- [ ] Secure file storage and access endpoints
 
 ---
 
