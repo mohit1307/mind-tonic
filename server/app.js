@@ -48,6 +48,8 @@ app.use('/api/schedule', require('./routes/schedule.routes'));
 app.use('/api/habits', require('./routes/habit.routes'));
 app.use('/api/ai', require('./routes/ai.routes'));
 app.use('/api/learning', require('./routes/learning.routes'));
+app.use('/api/documents', require('./routes/document.routes'));
+app.use('/api/expenses', require('./routes/expense.routes'));
 // app.use('/api/dashboard', require('./routes/dashboard.routes'));
 // app.use('/api/study', require('./routes/study.routes'));
 // app.use('/api/documents', require('./routes/document.routes'));

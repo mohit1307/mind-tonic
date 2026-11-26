@@ -164,16 +164,44 @@
 
 ---
 
-## Phase 9: Documents & Expense Management (Next)
+## Phase 9: Documents & Expense Management (OCR) ✅
+**Status:** Complete
+**Date:** 2026-11-26
+
+### Completed:
+- [x] Document Mongoose model (`server/models/Document.js`) with Multer disk upload storage, MIME type filtering (JPG, PNG, WebP, PDF), file size limits, and OCR metadata
+- [x] Expense Mongoose model (`server/models/Expense.js`) with categories, payment methods, college fee tracking (`semester`, `academicYear`, `receiptNumber`), and due dates
+- [x] Intelligent OCR Engine (`server/utils/ocrProcessor.js`) integrating Tesseract.js with heuristic regex extractors capturing amounts (₹/$), merchants/colleges, dates, line items, and auto-categorization
+- [x] Joi validation schemas for documents and expenses (`server/validators/document.validator.js`, `server/validators/expense.validator.js`)
+- [x] Document Service & Controller (`/api/documents/*`) with category filtering, search, and OCR reprocessing
+- [x] Expense Service & Controller (`/api/expenses/*`) with 1-click OCR creation (`createFromOCR`), bidirectional document linking, and aggregated monthly analytics
+- [x] Frontend `documentService` & `expenseService` with `useDocuments` and `useExpenses` reactive hooks
+- [x] `DocumentUploadModal` with drag-and-drop file uploader, category selection, and tags
+- [x] `DocumentCard` with file type indicators, OCR status badges, and 1-click "Verify & Add Expense" trigger
+- [x] `OCRReviewModal` showing parsed amount, merchant, category, date, and raw OCR text accordion allowing user verification before database commit
+- [x] `ExpenseStats` with 4 metrics: Monthly Spending, College Fees Paid, Pending Fees Due, Top Category
+- [x] `ExpenseCategoryChart` with Recharts BarChart and category percentage breakdown
+- [x] `ExpenseModal` supporting college fee toggle, semester/challan details, and due dates
+- [x] Full `Documents.jsx` and `Expenses.jsx` pages
+- [x] End-to-end testing: 100% backend OCR heuristic, bidirectional document-expense link, and analytics tests passed; 0 frontend build errors (1.70s)
+
+---
+
+## Phase 10: Notifications, Background Reminders & Full Analytics (Next)
 **Status:** Pending
 
 ### Planned:
-- [ ] Document Mongoose model with file upload via Multer (receipts, notes, bills, college documents)
-- [ ] Expense Mongoose model with category, amount, payment method, recurring flag, and college fee tracking
-- [ ] Server-side OCR engine (`tesseract.js` / regex parser) extracting amount, merchant, date, and description from uploaded receipts/bills
-- [ ] OCR Review Modal allowing the user to verify/correct extracted data before saving to database
-- [ ] Expense analytics & budget tracking (spending by category, monthly breakdown)
-- [ ] Secure file storage and access endpoints
+- [ ] Notification Mongoose model (`server/models/Notification.js`) with types (`reminder`, `streak_warning`, `missed_task`, `fee_due`, `review_due`)
+- [ ] Background cron jobs via `node-cron` (`server/jobs/reminderJob.js`, `server/jobs/streakJob.js`, `server/jobs/feeDueJob.js`)
+- [ ] In-app notification center (bell dropdown, mark as read, unread count badge)
+- [ ] Browser Web Notifications API integration
+- [ ] Comprehensive `Analytics.jsx` page:
+  - Weekly productivity score
+  - Focus hours trend (Recharts AreaChart)
+  - Habit completion heatmaps
+  - Task completion vs rollover rate
+  - Subject study distribution
+- [ ] Dynamic daily AI summary generation on Dashboard
 
 ---
 
