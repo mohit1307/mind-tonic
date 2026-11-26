@@ -41,8 +41,8 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// ─── API Routes (will be added per phase) ───────────────────────
-// app.use('/api/auth', require('./routes/auth.routes'));
+// ─── API Routes ────────────────────────────────────────────────
+app.use('/api/auth', require('./routes/auth.routes'));
 // app.use('/api/dashboard', require('./routes/dashboard.routes'));
 // app.use('/api/tasks', require('./routes/task.routes'));
 // app.use('/api/schedule', require('./routes/schedule.routes'));
