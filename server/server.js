@@ -6,6 +6,10 @@ const startServer = async () => {
   // Connect to MongoDB
   await connectDB();
 
+  // Initialize background cron jobs
+  const jobManager = require('./jobs');
+  jobManager.initJobs();
+
   // Ensure uploads directory exists
   const fs = require('fs');
   const path = require('path');

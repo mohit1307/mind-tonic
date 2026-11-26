@@ -15,29 +15,34 @@ import useAuth from '../hooks/useAuth';
 import taskService from '../services/taskService';
 import scheduleService from '../services/scheduleService';
 import habitService from '../services/habitService';
+import analyticsService from '../services/analyticsService';
 import Card, { CardHeader, CardTitle } from '../components/common/Card';
 import Button from '../components/common/Button';
 import Badge from '../components/common/Badge';
 import ScheduleBlockCard from '../components/routine/ScheduleBlockCard';
+import AICoachCard from '../components/analytics/AICoachCard';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [habitStats, setHabitStats] = useState(null);
   const [todaySchedule, setTodaySchedule] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
 
   const loadDashboardData = async () => {
     try {
-      const [statsData, scheduleData, habitData] = await Promise.all([
+      const [statsData, scheduleData, habitData, analyticsData] = await Promise.all([
         taskService.getStats(),
         scheduleService.getScheduleByDate(new Date()),
         habitService.getStats(),
+        analyticsService.getOverview().catch(() => null),
       ]);
       setStats(statsData);
       setTodaySchedule(scheduleData);
       setHabitStats(habitData);
+      setAnalytics(analyticsData);
     } catch (err) {
       console.warn('Dashboard data fetch warning:', err.message);
     } finally {
@@ -108,6 +113,11 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* AI Daily Performance Briefing */}
+      {analytics?.aiSummary && (
+        <AICoachCard summary={analytics.aiSummary} />
+      )}
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

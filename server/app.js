@@ -50,12 +50,8 @@ app.use('/api/ai', require('./routes/ai.routes'));
 app.use('/api/learning', require('./routes/learning.routes'));
 app.use('/api/documents', require('./routes/document.routes'));
 app.use('/api/expenses', require('./routes/expense.routes'));
-// app.use('/api/dashboard', require('./routes/dashboard.routes'));
-// app.use('/api/study', require('./routes/study.routes'));
-// app.use('/api/documents', require('./routes/document.routes'));
-// app.use('/api/expenses', require('./routes/expense.routes'));
-// app.use('/api/notifications', require('./routes/notification.routes'));
-// app.use('/api/analytics', require('./routes/analytics.routes'));
+app.use('/api/notifications', require('./routes/notification.routes'));
+app.use('/api/analytics', require('./routes/analytics.routes'));
 
 // 404 handler
 app.use(notFoundHandler);

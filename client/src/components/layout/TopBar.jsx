@@ -26,13 +26,14 @@ const PAGE_TITLES = {
   '/app/settings': 'Settings & Routine Preferences',
 };
 
+import NotificationDropdown from './NotificationDropdown';
+
 export default function TopBar({ onMenuClick }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const title = PAGE_TITLES[location.pathname] || 'Mind Tonic';
   const greeting = getGreeting();
@@ -80,37 +81,8 @@ export default function TopBar({ onMenuClick }) {
           <span>Ask AI Assistant</span>
         </button>
 
-        {/* Notifications Bell */}
-        <div className="relative">
-          <button
-            onClick={() => setNotificationsOpen(!notificationsOpen)}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 relative transition-colors"
-            title="Notifications"
-          >
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent-500 ring-2 ring-primary-900 animate-pulse" />
-          </button>
-
-          {/* Notifications Dropdown */}
-          {notificationsOpen && (
-            <div className="absolute right-0 mt-2 w-80 rounded-2xl glass-card p-4 shadow-2xl border border-white/10 animate-slide-up z-50">
-              <div className="flex items-center justify-between pb-3 border-b border-white/5">
-                <h4 className="text-sm font-semibold text-white">Notifications</h4>
-                <span className="text-2xs text-accent-400">2 unread</span>
-              </div>
-              <div className="py-2 space-y-2 text-xs">
-                <div className="p-2.5 rounded-xl bg-surface/80 border border-white/5 hover:border-accent-500/20 transition-colors">
-                  <p className="font-medium text-slate-200">Timetable ready</p>
-                  <p className="text-slate-400 text-2xs mt-0.5">Your daily schedule was optimized with 3 tasks.</p>
-                </div>
-                <div className="p-2.5 rounded-xl bg-surface/80 border border-white/5 hover:border-accent-500/20 transition-colors">
-                  <p className="font-medium text-slate-200">Habit reminder</p>
-                  <p className="text-slate-400 text-2xs mt-0.5">Remember to drink water & review notes.</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Dynamic Notifications Center */}
+        <NotificationDropdown />
 
         {/* User Dropdown */}
         <div className="relative">
