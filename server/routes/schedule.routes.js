@@ -13,6 +13,11 @@ const {
 // All schedule routes require authentication
 router.use(auth);
 
+// Missed-task recovery & alternative slot endpoints (must be above /:date)
+router.get('/missed/detect', scheduleController.detectMissed);
+router.post('/missed/suggest', scheduleController.suggestMissed);
+router.post('/missed/apply', scheduleController.applyMissed);
+
 // Generate timetable
 router.post('/generate', validate(generateScheduleSchema), scheduleController.generateSchedule);
 

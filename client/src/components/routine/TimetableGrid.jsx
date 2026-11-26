@@ -8,6 +8,7 @@ export default function TimetableGrid({
   blocks = [],
   onStatusChange,
   onDeleteBlock,
+  onRescheduleBlock,
   onGenerate,
   generating = false,
 }) {
@@ -91,6 +92,7 @@ export default function TimetableGrid({
             block={block}
             onStatusChange={onStatusChange}
             onDelete={onDeleteBlock}
+            onReschedule={onRescheduleBlock}
           />
         ))}
       </div>

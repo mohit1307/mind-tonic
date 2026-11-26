@@ -2,6 +2,7 @@ import { Sparkles } from 'lucide-react';
 
 const SUGGESTIONS = [
   'Create my timetable for today',
+  'I missed my workout. Find another time',
   'Add task: Study Java concurrency for 2 hours',
   'What tasks are pending today?',
   'Move my Java session to 7 PM',

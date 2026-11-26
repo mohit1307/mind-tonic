@@ -16,6 +16,7 @@ const ACTION_TITLES = {
   create_task: { label: 'Create New Task', icon: CheckSquare, color: 'text-secondary-400' },
   generate_schedule: { label: 'Generate Timetable', icon: Calendar, color: 'text-accent-400' },
   reschedule_block: { label: 'Reschedule Session', icon: Clock, color: 'text-warning-400' },
+  reschedule_missed: { label: 'Reschedule Missed Task', icon: Clock, color: 'text-amber-400' },
   complete_task: { label: 'Complete Task', icon: CheckCircle2, color: 'text-success-400' },
   create_habit: { label: 'Create Habit', icon: Target, color: 'text-purple-400' },
   log_habit: { label: 'Habit Check-in', icon: Target, color: 'text-purple-400' },
@@ -97,6 +98,15 @@ export default function ActionCard({ action, onConfirm, onReject }) {
             <p className="font-semibold text-white">Session: {action.parameters.title}</p>
             <p className="text-slate-400 text-2xs">
               New Time: <span className="text-accent-300 font-semibold">{action.parameters.startTime} - {action.parameters.endTime}</span>
+            </p>
+          </>
+        )}
+
+        {action.type === 'reschedule_missed' && (
+          <>
+            <p className="font-semibold text-white">Missed Task: {action.parameters.title || 'Focus Task'}</p>
+            <p className="text-slate-400 text-2xs">
+              Rescheduled Slot: <span className="text-amber-300 font-semibold">{action.parameters.newStartTime} - {action.parameters.newEndTime}</span>
             </p>
           </>
         )}

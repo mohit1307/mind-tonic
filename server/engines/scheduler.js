@@ -270,20 +270,111 @@ class SchedulingEngine {
   }
 
   /**
-   * Find alternative available slot for a missed task (for Phase 7 rescheduling)
+   * Find multiple ranked alternative slots for a missed task/session
+   *
+   * @param {Object} options
+   * @param {Array} options.blocks - Existing blocks in today's schedule
+   * @param {Object} options.preferences - User's working hours, sleep schedule
+   * @param {Number} options.durationMins - Duration of the task in minutes
+   * @param {String} options.fromTimeStr - "HH:MM" start scanning point
+   * @param {String} [options.excludeBlockId] - Block ID being rescheduled
+   * @param {Number} [options.limit=3] - Number of candidate suggestions
+   * @returns {Array} List of alternative slots: [{ startTime, endTime, durationMins, label }]
    */
-  findAlternativeSlot(timeline, durationMins, fromTimeStr, preferredWorkingEnd = '22:00') {
-    const fromMins = timeToMinutes(fromTimeStr);
-    const limitMins = timeToMinutes(preferredWorkingEnd);
+  findMultipleAlternativeSlots({
+    blocks = [],
+    preferences = {},
+    durationMins = 60,
+    fromTimeStr = '09:00',
+    excludeBlockId = null,
+    limit = 3,
+  }) {
+    // 1. Initialize timeline array
+    const timeline = new Array(TOTAL_SLOTS).fill(null);
+
+    const sleepStart = preferences.sleepStart || '23:00';
+    const sleepEnd = preferences.sleepEnd || '07:00';
+    const workingEnd = preferences.workingHoursEnd || '22:00';
+
+    // 2. Lock sleep window
+    this._lockSleepWindow(timeline, sleepStart, sleepEnd);
+
+    // 3. Lock existing scheduled blocks (excluding the missed block itself)
+    blocks.forEach((b) => {
+      if (excludeBlockId && b._id && b._id.toString() === excludeBlockId.toString()) {
+        return; // Don't block the slot of the task we are moving!
+      }
+      if (b.type === 'sleep') return; // already locked
+
+      const sMins = timeToMinutes(b.startTime);
+      const eMins = timeToMinutes(b.endTime);
+      if (eMins > sMins) {
+        const sSlot = Math.floor(sMins / MINUTES_PER_SLOT);
+        const eSlot = Math.floor(eMins / MINUTES_PER_SLOT) - 1;
+        for (let i = sSlot; i <= eSlot && i < TOTAL_SLOTS; i++) {
+          timeline[i] = b;
+        }
+      }
+    });
+
+    // 4. Scan starting from fromTimeStr up to sleepStart
+    const startScanMins = Math.max(timeToMinutes(fromTimeStr), timeToMinutes(sleepEnd));
+    const maxScanMins = timeToMinutes(sleepStart);
     const slotsNeeded = Math.ceil(durationMins / MINUTES_PER_SLOT);
 
-    const range = this._findContiguousSlots(timeline, slotsNeeded, fromMins, limitMins);
-    if (!range) return null;
+    const suggestions = [];
+    const minSlot = Math.floor(startScanMins / MINUTES_PER_SLOT);
+    const maxSlot = Math.floor(maxScanMins / MINUTES_PER_SLOT) - 1;
 
-    return {
-      startTime: minutesToTime(range.startSlot * MINUTES_PER_SLOT),
-      endTime: minutesToTime((range.endSlot + 1) * MINUTES_PER_SLOT),
-    };
+    let consecutive = 0;
+    let candidateStart = -1;
+
+    for (let i = minSlot; i <= maxSlot && i < TOTAL_SLOTS; i++) {
+      if (timeline[i] === null) {
+        if (consecutive === 0) candidateStart = i;
+        consecutive++;
+
+        if (consecutive === slotsNeeded) {
+          const sTime = minutesToTime(candidateStart * MINUTES_PER_SLOT);
+          const eTime = minutesToTime((i + 1) * MINUTES_PER_SLOT);
+
+          const isWithinWorkingHours = timeToMinutes(eTime) <= timeToMinutes(workingEnd);
+
+          suggestions.push({
+            startTime: sTime,
+            endTime: eTime,
+            durationMins,
+            isWithinWorkingHours,
+            label: isWithinWorkingHours
+              ? `${sTime} - ${eTime} (Working Hours)`
+              : `${sTime} - ${eTime} (Evening Hours)`,
+          });
+
+          if (suggestions.length >= limit) break;
+
+          // Reset search and jump forward by at least 15 mins to give spaced alternatives
+          i += Math.floor(15 / MINUTES_PER_SLOT);
+          consecutive = 0;
+          candidateStart = -1;
+        }
+      } else {
+        consecutive = 0;
+        candidateStart = -1;
+      }
+    }
+
+    return suggestions;
+  }
+
+  /**
+   * Check whether a proposed time slot is completely free without collisions
+   */
+  isSlotFree(timeline, startTimeStr, endTimeStr) {
+    const sMins = timeToMinutes(startTimeStr);
+    const eMins = timeToMinutes(endTimeStr);
+    const sSlot = Math.floor(sMins / MINUTES_PER_SLOT);
+    const eSlot = Math.floor(eMins / MINUTES_PER_SLOT) - 1;
+    return this._areSlotsAvailable(timeline, sSlot, eSlot);
   }
 }
 

@@ -6,8 +6,10 @@ import {
   CheckCircle2,
   Trash2,
   Sparkles,
+  AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
-import { formatDuration, formatTime } from '../../utils/formatters';
+import { formatDuration } from '../../utils/formatters';
 
 const TYPE_CONFIG = {
   fixed: {
@@ -36,10 +38,17 @@ const TYPE_CONFIG = {
   },
 };
 
-export default function ScheduleBlockCard({ block, onStatusChange, onDelete }) {
+export default function ScheduleBlockCard({
+  block,
+  onStatusChange,
+  onDelete,
+  onReschedule,
+}) {
   const config = TYPE_CONFIG[block.type] || TYPE_CONFIG.flexible;
   const Icon = config.icon;
   const isCompleted = block.status === 'completed';
+  const isMissed = block.status === 'missed';
+  const isRescheduled = block.status === 'rescheduled';
 
   // Calculate duration in minutes
   const [sh, sm] = block.startTime.split(':').map(Number);
@@ -47,12 +56,16 @@ export default function ScheduleBlockCard({ block, onStatusChange, onDelete }) {
   let durationMins = eh * 60 + em - (sh * 60 + sm);
   if (durationMins < 0) durationMins += 1440; // Overnight wrap
 
+  let statusCardStyle = 'bg-surface/80';
+  if (isCompleted) statusCardStyle = 'opacity-60 bg-surface/40';
+  if (isMissed) statusCardStyle = 'bg-amber-950/20 border-amber-500/30';
+
   return (
     <div
       className={`
         glass-card p-4 transition-all duration-200 border
         hover:border-white/20 group relative ${config.border}
-        ${isCompleted ? 'opacity-60 bg-surface/40' : 'bg-surface/80'}
+        ${statusCardStyle}
       `}
     >
       <div className="flex items-start justify-between gap-3">
@@ -71,6 +84,21 @@ export default function ScheduleBlockCard({ block, onStatusChange, onDelete }) {
                 {config.label}
               </span>
 
+              {/* Missed / Rescheduled badges */}
+              {isMissed && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-bold bg-danger-500/20 text-danger-300 border border-danger-500/40">
+                  <AlertTriangle className="w-2.5 h-2.5" />
+                  Missed
+                </span>
+              )}
+
+              {isRescheduled && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  <RotateCcw className="w-2.5 h-2.5" />
+                  Rescheduled
+                </span>
+              )}
+
               {durationMins > 0 && (
                 <span className="text-2xs text-slate-400 bg-white/5 px-2 py-0.5 rounded border border-white/5 flex items-center gap-1">
                   <Clock className="w-2.5 h-2.5" />
@@ -87,7 +115,7 @@ export default function ScheduleBlockCard({ block, onStatusChange, onDelete }) {
 
             <h4
               className={`text-sm font-semibold truncate ${
-                isCompleted ? 'line-through text-slate-400' : 'text-slate-100'
+                isCompleted ? 'line-through text-slate-400' : isMissed ? 'text-amber-200' : 'text-slate-100'
               }`}
             >
               {block.title}
@@ -96,7 +124,26 @@ export default function ScheduleBlockCard({ block, onStatusChange, onDelete }) {
         </div>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Quick Reschedule button if missed or flexible task */}
+          {block.type === 'flexible' && !isCompleted && onReschedule && (
+            <button
+              onClick={() => onReschedule(block)}
+              className={`
+                px-2.5 py-1 rounded-xl text-2xs font-semibold flex items-center gap-1 border transition-all
+                ${
+                  isMissed
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                    : 'text-slate-400 hover:text-white hover:bg-white/5 border-white/5 opacity-0 group-hover:opacity-100'
+                }
+              `}
+              title="Reschedule / Find alternative open slot"
+            >
+              <RotateCcw className="w-3 h-3" />
+              {isMissed ? 'Find Slot' : 'Reschedule'}
+            </button>
+          )}
+
           {block.type !== 'sleep' && (
             <button
               onClick={() =>

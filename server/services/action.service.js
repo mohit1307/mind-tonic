@@ -52,6 +52,22 @@ class ActionService {
         };
       }
 
+      case 'reschedule_missed': {
+        const { date, blockId, newStartTime, newEndTime } = parameters;
+        const result = await scheduleService.rescheduleMissedBlock(
+          userId,
+          date || new Date().toISOString(),
+          blockId,
+          newStartTime,
+          newEndTime
+        );
+        return {
+          message: result.message,
+          schedule: result.schedule,
+          rescheduledBlock: result.rescheduledBlock,
+        };
+      }
+
       case 'complete_task': {
         const task = await taskService.toggleComplete(userId, parameters.taskId);
         return {

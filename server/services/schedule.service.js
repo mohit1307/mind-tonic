@@ -2,7 +2,7 @@ const Schedule = require('../models/Schedule');
 const Task = require('../models/Task');
 const User = require('../models/User');
 const schedulerEngine = require('../engines/scheduler');
-const { normalizeDate } = require('../utils/timeUtils');
+const { normalizeDate, timeToMinutes, minutesToTime, doTimesOverlap } = require('../utils/timeUtils');
 const ApiError = require('../utils/apiError');
 
 class ScheduleService {
@@ -171,6 +171,198 @@ class ScheduleService {
     }).sort({ date: 1 });
 
     return schedules;
+  }
+
+  /**
+   * Detect any missed tasks whose scheduled time window has passed
+   */
+  async detectMissedBlocks(userId, dateInput = new Date(), currentTimeStr = null) {
+    const targetDate = normalizeDate(dateInput);
+    const schedule = await Schedule.findOne({ userId, date: targetDate });
+    if (!schedule || !schedule.blocks || schedule.blocks.length === 0) {
+      return { missedBlocks: [] };
+    }
+
+    const user = await User.findById(userId);
+    const preferences = user?.preferences || {};
+
+    // Determine current time
+    let curTime = currentTimeStr;
+    if (!curTime) {
+      const now = new Date();
+      curTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    }
+    const currentMins = timeToMinutes(curTime);
+
+    const missedBlocks = [];
+    let scheduleUpdated = false;
+
+    for (const block of schedule.blocks) {
+      // Only check flexible/study tasks that are scheduled and not completed
+      if (block.type === 'sleep' || block.type === 'fixed') continue;
+
+      const endMins = timeToMinutes(block.endTime);
+
+      // If scheduled time has passed and block is not completed
+      if (block.status === 'scheduled' && endMins < currentMins) {
+        block.status = 'missed';
+        scheduleUpdated = true;
+
+        // Calculate duration
+        const [sh, sm] = block.startTime.split(':').map(Number);
+        const [eh, em] = block.endTime.split(':').map(Number);
+        let dur = eh * 60 + em - (sh * 60 + sm);
+        if (dur < 0) dur += 1440;
+
+        // Find alternative suggestions
+        const suggestions = schedulerEngine.findMultipleAlternativeSlots({
+          blocks: schedule.blocks,
+          preferences,
+          durationMins: dur,
+          fromTimeStr: curTime,
+          excludeBlockId: block._id,
+          limit: 3,
+        });
+
+        missedBlocks.push({
+          block,
+          durationMins: dur,
+          passedTime: block.endTime,
+          suggestions,
+        });
+      } else if (block.status === 'missed') {
+        // Already flagged as missed, also generate suggestions
+        const [sh, sm] = block.startTime.split(':').map(Number);
+        const [eh, em] = block.endTime.split(':').map(Number);
+        let dur = eh * 60 + em - (sh * 60 + sm);
+        if (dur < 0) dur += 1440;
+
+        const suggestions = schedulerEngine.findMultipleAlternativeSlots({
+          blocks: schedule.blocks,
+          preferences,
+          durationMins: dur,
+          fromTimeStr: curTime,
+          excludeBlockId: block._id,
+          limit: 3,
+        });
+
+        missedBlocks.push({
+          block,
+          durationMins: dur,
+          passedTime: block.endTime,
+          suggestions,
+        });
+      }
+    }
+
+    if (scheduleUpdated) {
+      await schedule.save();
+    }
+
+    return {
+      date: targetDate,
+      currentTime: curTime,
+      missedCount: missedBlocks.length,
+      missedBlocks,
+    };
+  }
+
+  /**
+   * Suggest alternative available slots for a specific block
+   */
+  async suggestAlternativeSlots(userId, dateInput = new Date(), blockId, currentTimeStr = null) {
+    const targetDate = normalizeDate(dateInput);
+    const schedule = await Schedule.findOne({ userId, date: targetDate });
+    if (!schedule) throw ApiError.notFound('Schedule not found');
+
+    const block = schedule.blocks.id(blockId);
+    if (!block) throw ApiError.notFound('Schedule block not found');
+
+    const user = await User.findById(userId);
+    const preferences = user?.preferences || {};
+
+    let curTime = currentTimeStr;
+    if (!curTime) {
+      const now = new Date();
+      curTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    }
+
+    const [sh, sm] = block.startTime.split(':').map(Number);
+    const [eh, em] = block.endTime.split(':').map(Number);
+    let durationMins = eh * 60 + em - (sh * 60 + sm);
+    if (durationMins < 0) durationMins += 1440;
+
+    const suggestions = schedulerEngine.findMultipleAlternativeSlots({
+      blocks: schedule.blocks,
+      preferences,
+      durationMins,
+      fromTimeStr: curTime,
+      excludeBlockId: block._id,
+      limit: 3,
+    });
+
+    return {
+      block,
+      durationMins,
+      suggestions,
+    };
+  }
+
+  /**
+   * Reschedule a missed block to an alternative slot without overwriting fixed commitments
+   */
+  async rescheduleMissedBlock(userId, dateInput, blockId, newStartTime, newEndTime) {
+    const targetDate = normalizeDate(dateInput);
+    const schedule = await Schedule.findOne({ userId, date: targetDate });
+    if (!schedule) throw ApiError.notFound('Schedule not found');
+
+    const block = schedule.blocks.id(blockId);
+    if (!block) throw ApiError.notFound('Schedule block not found');
+
+    if (block.type === 'fixed') {
+      throw ApiError.badRequest('Cannot reschedule a fixed commitment automatically');
+    }
+
+    const newStartMins = timeToMinutes(newStartTime);
+    const newEndMins = timeToMinutes(newEndTime);
+
+    if (newEndMins <= newStartMins) {
+      throw ApiError.badRequest('End time must be after start time');
+    }
+
+    // Collision check: verify new slot doesn't collide with any fixed commitment or sleep window
+    for (const other of schedule.blocks) {
+      if (other._id.toString() === blockId.toString()) continue;
+
+      // Check collision with fixed commitments or sleep
+      if (other.type === 'fixed' || other.type === 'sleep') {
+        const oStart = timeToMinutes(other.startTime);
+        const oEnd = timeToMinutes(other.endTime);
+
+        if (oEnd > oStart) {
+          if (newStartMins < oEnd && oStart < newEndMins) {
+            throw ApiError.conflict(
+              `Cannot reschedule: Time slot overlaps with ${other.type} block "${other.title}" (${other.startTime} - ${other.endTime})`
+            );
+          }
+        }
+      }
+    }
+
+    // Apply the reschedule
+    block.startTime = newStartTime;
+    block.endTime = newEndTime;
+    block.status = 'rescheduled';
+
+    // Sort blocks chronologically
+    schedule.blocks.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+    await schedule.save();
+
+    return {
+      message: `"${block.title}" was rescheduled to ${newStartTime} - ${newEndTime}.`,
+      schedule,
+      rescheduledBlock: block,
+    };
   }
 }
 

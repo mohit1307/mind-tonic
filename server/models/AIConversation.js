@@ -12,6 +12,7 @@ const actionSchema = new mongoose.Schema(
         'create_task',
         'generate_schedule',
         'reschedule_block',
+        'reschedule_missed',
         'complete_task',
         'create_habit',
         'log_habit',

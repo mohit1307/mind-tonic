@@ -157,6 +157,75 @@ class AIService {
       }
     }
 
+    // ── Pattern 2.5: Missed Task Rescheduling (e.g. "I missed my workout. Find another time", "Missed Java session") ──
+    const missedMatch = cleanMsg.match(/(?:i missed|missed)\s+(.+?)(?:\.|\?|$|\s+find|\s+reschedule)/i);
+    if (missedMatch || cleanMsg.includes('missed my') || cleanMsg.includes('missed task')) {
+      const queryItem = missedMatch ? missedMatch[1].replace(/my\s+/i, '').trim().toLowerCase() : '';
+
+      // Find in today's blocks
+      let targetBlock = context.todayBlocks.find(
+        (b) => queryItem && b.title.toLowerCase().includes(queryItem) && b.type !== 'sleep' && b.type !== 'fixed'
+      );
+
+      // If not directly matched by query string, check for any block marked 'missed' or past its end time
+      if (!targetBlock) {
+        const now = new Date();
+        const curMins = now.getHours() * 60 + now.getMinutes();
+        targetBlock = context.todayBlocks.find(
+          (b) =>
+            (b.status === 'missed' || (b.status === 'scheduled' && timeToMinutes(b.endTime) < curMins)) &&
+            b.type !== 'sleep' &&
+            b.type !== 'fixed'
+        );
+      }
+
+      if (targetBlock) {
+        // Calculate duration
+        const [sh, sm] = targetBlock.startTime.split(':').map(Number);
+        const [eh, em] = targetBlock.endTime.split(':').map(Number);
+        let dur = eh * 60 + em - (sh * 60 + sm);
+        if (dur < 0) dur += 1440;
+
+        const now = new Date();
+        const curTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+        const schedulerEngine = require('../engines/scheduler');
+        const suggestions = schedulerEngine.findMultipleAlternativeSlots({
+          blocks: context.todayBlocks,
+          preferences: context.userPreferences,
+          durationMins: dur,
+          fromTimeStr: curTimeStr,
+          excludeBlockId: targetBlock._id,
+          limit: 1,
+        });
+
+        if (suggestions.length > 0) {
+          const slot = suggestions[0];
+          return {
+            reply: `I understand you missed "${targetBlock.title}". I checked your remaining available time and found an open slot from ${slot.startTime} to ${slot.endTime} (${dur}m). Would you like to reschedule it?`,
+            action: {
+              actionId: crypto.randomUUID(),
+              type: 'reschedule_missed',
+              parameters: {
+                date: new Date().toISOString(),
+                blockId: targetBlock._id.toString(),
+                newStartTime: slot.startTime,
+                newEndTime: slot.endTime,
+                title: targetBlock.title,
+                durationMins: dur,
+              },
+              status: 'pending_confirmation',
+            },
+          };
+        } else {
+          return {
+            reply: `I noticed you missed "${targetBlock.title}", but there are no remaining free slots within your preferred hours today without conflicting with fixed commitments or sleep. Would you like me to move it to tomorrow?`,
+            action: null,
+          };
+        }
+      }
+    }
+
     // ── Pattern 3: Create Task (e.g. "Add task: Study Java for 2 hours", "New task: Gym") ──
     if (
       cleanMsg.startsWith('add task') ||

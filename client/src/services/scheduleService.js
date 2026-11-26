@@ -53,6 +53,44 @@ export const scheduleService = {
     const response = await api.get(`/schedule/week/${dateStr}`);
     return response.data.schedules;
   },
+
+  /**
+   * Detect missed tasks for a given date
+   */
+  async detectMissed(date, currentTime = null) {
+    const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+    const response = await api.get('/schedule/missed/detect', {
+      params: { date: dateStr, currentTime },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get alternative slots for a specific missed block
+   */
+  async suggestMissed(date, blockId, currentTime = null) {
+    const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+    const response = await api.post('/schedule/missed/suggest', {
+      date: dateStr,
+      blockId,
+      currentTime,
+    });
+    return response.data;
+  },
+
+  /**
+   * Apply rescheduling to a new slot
+   */
+  async applyMissed(date, blockId, newStartTime, newEndTime) {
+    const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+    const response = await api.post('/schedule/missed/apply', {
+      date: dateStr,
+      blockId,
+      newStartTime,
+      newEndTime,
+    });
+    return response.data;
+  },
 };
 
 export default scheduleService;

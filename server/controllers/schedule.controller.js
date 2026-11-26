@@ -70,6 +70,47 @@ class ScheduleController {
       next(error);
     }
   }
+
+  async detectMissed(req, res, next) {
+    try {
+      const { date, currentTime } = req.query;
+      const result = await scheduleService.detectMissedBlocks(req.user.id, date, currentTime);
+      return apiResponse.success(res, result, 'Missed tasks detection completed');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async suggestMissed(req, res, next) {
+    try {
+      const { date, blockId, currentTime } = req.body;
+      const result = await scheduleService.suggestAlternativeSlots(
+        req.user.id,
+        date,
+        blockId,
+        currentTime
+      );
+      return apiResponse.success(res, result, 'Alternative slots suggested');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async applyMissed(req, res, next) {
+    try {
+      const { date, blockId, newStartTime, newEndTime } = req.body;
+      const result = await scheduleService.rescheduleMissedBlock(
+        req.user.id,
+        date,
+        blockId,
+        newStartTime,
+        newEndTime
+      );
+      return apiResponse.success(res, result, 'Task rescheduled successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new ScheduleController();

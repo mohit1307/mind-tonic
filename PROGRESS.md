@@ -124,15 +124,33 @@
 
 ---
 
-## Phase 7: Intelligent Missed-Task Rescheduling (Next)
+## Phase 7: Intelligent Missed-Task Rescheduling ✅
+**Status:** Complete
+**Date:** 2026-11-26
+
+### Completed:
+- [x] Missed-task detection engine (`detectMissedBlocks`) comparing current time against scheduled block endpoints
+- [x] Automated timeline scan (`findMultipleAlternativeSlots`) honoring sleep windows, working hours, and existing blocks
+- [x] Strict Fixed Commitment Protection: algorithm guarantees fixed commitments (college, meetings) are never collided with, moved, or overwritten
+- [x] Express endpoints: `GET /api/schedule/missed/detect`, `POST /api/schedule/missed/suggest`, `POST /api/schedule/missed/apply`
+- [x] AI Assistant integration: natural language intent recognition ("I missed my workout. Find another time") proposing structured `reschedule_missed` action
+- [x] Safe action execution handler in `action.service.js` with conflict detection throwing 409 on attempted overlap
+- [x] Frontend `MissedTaskAlert` banner with 1-click quick reschedule and full slot inspector trigger
+- [x] Frontend `RescheduleModal` slot picker with AI recommendations and custom time override
+- [x] Enhanced `ScheduleBlockCard` with `missed` status badge (amber alert) and quick "Find Slot" action
+- [x] End-to-end testing: 100% verification passing all algorithm, DB, collision safety, AI intent tests, and 0 frontend build errors
+
+---
+
+## Phase 8: Learning & Study Management (Next)
 **Status:** Pending
 
 ### Planned:
-- [ ] Missed-task detection engine
-- [ ] Automated scan of user's remaining available waking hours
-- [ ] Alternative slot suggestion generator
-- [ ] Rescheduling suggestion notification / card in Routine & AI Assistant
-- [ ] Approval confirmation flow updating timetable without overwriting fixed commitments
+- [ ] Subject & Topic tracking (syllabus progress, difficulty, confidence level)
+- [ ] Study session timer & logger with focus metrics
+- [ ] Spaced Repetition Engine (SM-2 algorithm) for revision schedules
+- [ ] Active recall review cards
+- [ ] Learning analytics (hours per subject, confidence distribution, revision calendar)
 
 ---
 
