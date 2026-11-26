@@ -38,27 +38,48 @@
 - [x] Route Guards: `ProtectedRoute` and `PublicRoute`
 - [x] Login page (`/login`) with dark glass UI, validation, and evaluator Demo Account autofill
 - [x] Register page (`/register`) with real-time feedback and validation
-- [x] Responsive App Shell:
-  - Collapsible desktop `Sidebar` and mobile slide-out drawer with active route highlighting
-  - Sticky `TopBar` with personalized greeting, time, quick AI trigger, notifications dropdown, and user menu
-  - `AppLayout` wrapper for all protected routes
+- [x] Responsive App Shell (Sidebar, TopBar, AppLayout)
 - [x] Settings page (`/app/settings`) with working hours, sleep windows, profile info, and password change
 - [x] Route pages setup (Dashboard, Routine, Tasks, Habits, AI Assistant, Learning, Documents, Expenses, Analytics)
 - [x] End-to-end testing: Backend auth endpoints and Frontend build verified (0 errors)
 
 ---
 
-## Phase 3: Task Management (Next)
-**Status:** Pending
+## Phase 3: Task Management ✅
+**Status:** Complete
+**Date:** 2026-11-26
 
-### Planned:
-- [ ] Task Mongoose model with priority, category, duration, deadlines, recurring fields
-- [ ] Task CRUD APIs with Joi validation & overdue task filters
-- [ ] Tasks UI with interactive filtering, sorting, status toggles (pending, in_progress, completed)
-- [ ] Task Creation & Edit modal with time estimation & priority tagging
-- [ ] Recurring task pattern generator
+### Completed:
+- [x] Task Mongoose Model with compound indexes on `{ userId, status }`, `{ userId, deadline }`, `{ userId, priority }`, and `{ userId, category }`
+- [x] Support for flexible tasks (duration, priority, deadline) and fixed commitments (`isFixed`, `fixedStartTime`, `fixedEndTime`)
+- [x] Virtual property `isOverdue`
+- [x] Joi validation schemas for creation, modification, status updates, and query filtering
+- [x] Full Task Service & Controller (CRUD, toggleComplete, updateStatus, getStats, getOverdue, getUpcoming)
+- [x] Mounted `/api/tasks` routes with JWT auth protection
+- [x] Frontend `taskService` API client
+- [x] `useTasks` custom hook with optimistic completion updates and reactive filtering
+- [x] `TaskCard` component with checkmark toggle, fixed commitment lock badge, category pill, priority badge, duration chip, deadline timer, and action menu
+- [x] `TaskModal` for creating & editing tasks, with duration presets and fixed commitment toggle
+- [x] `TaskFilterBar` with live search, category and priority filters, and status tabs (All, Pending, In Progress, Completed, Overdue)
+- [x] `TaskStatsBar` showing live total, pending, completed, overdue, and completion rates
+- [x] Dynamic `Dashboard.jsx` integrating live task metrics and recent pending deliverables
+- [x] End-to-end testing: 0 build errors on frontend, 100% backend Task tests passed
 
 ---
 
-## Phase 4–11: Upcoming
+## Phase 4: Smart Timetable / Scheduling Engine (Next)
+**Status:** Pending
+
+### Planned:
+- [ ] Constraint-based deterministic slot-filler algorithm in `server/engines/scheduler.js`
+- [ ] 24-hour timeline discretization (5-minute slot array, 288 slots)
+- [ ] Fixed commitments locking (college, work, meals, sleep)
+- [ ] Flexible task prioritization & contiguous slot placement within working hours
+- [ ] Automatic break insertion between consecutive heavy sessions
+- [ ] Schedule Mongoose model & schedule generation API
+- [ ] Interactive Timetable UI in `Routine.jsx` (day/week views, time block cards, status indicators)
+
+---
+
+## Phase 5–11: Upcoming
 See architecture document for full roadmap.
