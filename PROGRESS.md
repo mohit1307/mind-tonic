@@ -50,36 +50,56 @@
 **Date:** 2026-11-26
 
 ### Completed:
-- [x] Task Mongoose Model with compound indexes on `{ userId, status }`, `{ userId, deadline }`, `{ userId, priority }`, and `{ userId, category }`
-- [x] Support for flexible tasks (duration, priority, deadline) and fixed commitments (`isFixed`, `fixedStartTime`, `fixedEndTime`)
+- [x] Task Mongoose Model with compound indexes
+- [x] Support for flexible tasks and fixed commitments (`isFixed`, `fixedStartTime`, `fixedEndTime`)
 - [x] Virtual property `isOverdue`
 - [x] Joi validation schemas for creation, modification, status updates, and query filtering
 - [x] Full Task Service & Controller (CRUD, toggleComplete, updateStatus, getStats, getOverdue, getUpcoming)
 - [x] Mounted `/api/tasks` routes with JWT auth protection
 - [x] Frontend `taskService` API client
 - [x] `useTasks` custom hook with optimistic completion updates and reactive filtering
-- [x] `TaskCard` component with checkmark toggle, fixed commitment lock badge, category pill, priority badge, duration chip, deadline timer, and action menu
-- [x] `TaskModal` for creating & editing tasks, with duration presets and fixed commitment toggle
-- [x] `TaskFilterBar` with live search, category and priority filters, and status tabs (All, Pending, In Progress, Completed, Overdue)
-- [x] `TaskStatsBar` showing live total, pending, completed, overdue, and completion rates
+- [x] `TaskCard`, `TaskModal`, `TaskFilterBar`, `TaskStatsBar` components
 - [x] Dynamic `Dashboard.jsx` integrating live task metrics and recent pending deliverables
 - [x] End-to-end testing: 0 build errors on frontend, 100% backend Task tests passed
 
 ---
 
-## Phase 4: Smart Timetable / Scheduling Engine (Next)
-**Status:** Pending
+## Phase 4: Smart Timetable / Scheduling Engine ✅
+**Status:** Complete
+**Date:** 2026-11-26
 
-### Planned:
-- [ ] Constraint-based deterministic slot-filler algorithm in `server/engines/scheduler.js`
-- [ ] 24-hour timeline discretization (5-minute slot array, 288 slots)
-- [ ] Fixed commitments locking (college, work, meals, sleep)
-- [ ] Flexible task prioritization & contiguous slot placement within working hours
-- [ ] Automatic break insertion between consecutive heavy sessions
-- [ ] Schedule Mongoose model & schedule generation API
-- [ ] Interactive Timetable UI in `Routine.jsx` (day/week views, time block cards, status indicators)
+### Completed:
+- [x] Constraint-based deterministic slot-filler algorithm in `server/engines/scheduler.js`
+- [x] Discretization of 24 hours into 288 5-minute slots
+- [x] Immovable fixed commitment locking (college, work, etc.)
+- [x] Sleep window locking based on user preferences
+- [x] Priority-weighted sorting (Critical > High > Medium > Low) and deadline urgency
+- [x] Contiguous free-slot search within user's preferred working boundaries
+- [x] Automatic recharge break insertion (15 min) after intensive study/work sessions
+- [x] Schedule Mongoose model (`server/models/Schedule.js`) with `{ userId, date }` unique compound index
+- [x] Schedule Service, Controller, and mounted `/api/schedule` routes (generate, getByDate, updateBlock, weekView)
+- [x] Frontend `scheduleService` API client & `useSchedule` reactive state hook
+- [x] `DateNavigator` component with calendar date picker, previous/next, and quick "Today" jump
+- [x] `ScheduleBlockCard` with color-coded type borders (Fixed, Flexible, Break, Sleep), time chips, duration, and status toggles
+- [x] `TimetableGrid` displaying focus time, fixed hours, rest break counters, and chronological schedule blocks
+- [x] Interactive `Routine.jsx` page with instant "Generate Today's Routine" action
+- [x] Updated `Dashboard.jsx` featuring a live daily routine timeline snippet
+- [x] End-to-end testing: 100% algorithmic verification of fixed commitment preservation, task placement, break insertion, and 0 frontend compilation errors
 
 ---
 
-## Phase 5–11: Upcoming
+## Phase 5: Habit Tracker (Next)
+**Status:** Pending
+
+### Planned:
+- [ ] Habit & HabitLog Mongoose models with streaks and target frequency
+- [ ] Habit CRUD & daily completion log APIs (`/api/habits/*`)
+- [ ] Streak calculation logic (currentStreak, longestStreak)
+- [ ] Midnight streak evaluation cron job
+- [ ] Habit Tracker UI in `Habits.jsx` (today's habit checklist, streak flames, completion badges)
+- [ ] Weekly completion analytics & visual progress charts with Recharts
+
+---
+
+## Phase 6–11: Upcoming
 See architecture document for full roadmap.

@@ -8,53 +8,63 @@ import {
   Flame,
   ArrowRight,
   TrendingUp,
-  BookOpen,
   Plus,
   AlertTriangle,
 } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 import taskService from '../services/taskService';
+import scheduleService from '../services/scheduleService';
 import Card, { CardHeader, CardTitle } from '../components/common/Card';
 import Button from '../components/common/Button';
 import Badge from '../components/common/Badge';
-import TaskCard from '../components/tasks/TaskCard';
+import ScheduleBlockCard from '../components/routine/ScheduleBlockCard';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
-  const [recentTasks, setRecentTasks] = useState([]);
+  const [todaySchedule, setTodaySchedule] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+
+  const loadDashboardData = async () => {
+    try {
+      const [statsData, scheduleData] = await Promise.all([
+        taskService.getStats(),
+        scheduleService.getScheduleByDate(new Date()),
+      ]);
+      setStats(statsData);
+      setTodaySchedule(scheduleData);
+    } catch (err) {
+      console.warn('Dashboard data fetch warning:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function loadDashboardData() {
-      try {
-        const [statsData, tasksResponse] = await Promise.all([
-          taskService.getStats(),
-          taskService.getTasks({ limit: 4, status: 'pending' }),
-        ]);
-        setStats(statsData);
-        setRecentTasks(tasksResponse.data || []);
-      } catch (err) {
-        console.warn('Dashboard data fetch warning:', err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
     loadDashboardData();
   }, []);
 
-  const handleToggleComplete = async (taskId) => {
+  const handleGenerateToday = async () => {
+    setGenerating(true);
     try {
-      await taskService.toggleComplete(taskId);
-      // Refresh tasks & stats
-      const [statsData, tasksResponse] = await Promise.all([
-        taskService.getStats(),
-        taskService.getTasks({ limit: 4, status: 'pending' }),
-      ]);
-      setStats(statsData);
-      setRecentTasks(tasksResponse.data || []);
+      const updated = await scheduleService.generateSchedule({
+        date: new Date().toISOString(),
+      });
+      setTodaySchedule(updated);
     } catch (err) {
-      console.error('Failed to toggle task:', err);
+      console.error('Failed to generate today:', err);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleBlockStatus = async (blockId, status) => {
+    try {
+      await scheduleService.updateBlock(new Date(), blockId, { status });
+      loadDashboardData();
+    } catch (err) {
+      console.error('Failed to update block:', err);
     }
   };
 
@@ -76,14 +86,14 @@ export default function Dashboard() {
               <span className="text-slate-200 font-medium">
                 {user?.preferences?.workingHoursStart || '09:00'} - {user?.preferences?.workingHoursEnd || '22:00'}
               </span>
-              . Mind Tonic will keep your schedule organized and adapt when plans change.
+              . Mind Tonic adapts your timetable around fixed commitments and study goals.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <Link to="/app/routine">
               <Button icon={Calendar} size="md">
-                Generate Today's Routine
+                View Timetable
               </Button>
             </Link>
             <Link to="/app/tasks">
@@ -95,7 +105,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Metrics Row (Dynamically populated from live task stats) */}
+      {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <div className="flex items-center justify-between">
@@ -123,6 +133,24 @@ export default function Dashboard() {
 
         <Card>
           <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Scheduled Today</span>
+            <div className="p-2 rounded-xl bg-accent-500/10 text-accent-400">
+              <Calendar className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-white">
+              {todaySchedule?.blocks?.length || 0}
+            </span>
+            <span className="text-xs text-slate-400">time blocks</span>
+          </div>
+          <div className="mt-2 text-2xs text-slate-500">
+            {todaySchedule?.blocks?.length > 0 ? 'Optimal timetable active' : 'Timetable not generated'}
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Completed Tasks</span>
             <div className="p-2 rounded-xl bg-success-500/10 text-success-400">
               <CheckCircle2 className="w-4 h-4" />
@@ -137,30 +165,14 @@ export default function Dashboard() {
             </Badge>
           </div>
           <div className="mt-2 text-2xs text-slate-500">
-            Tasks completed successfully
-          </div>
-        </Card>
-
-        <Card>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Habit Streak</span>
-            <div className="p-2 rounded-xl bg-warning-500/10 text-warning-400">
-              <Flame className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-white">0 Days</span>
-            <Badge color="warning" size="sm">Phase 5</Badge>
-          </div>
-          <div className="mt-2 text-2xs text-slate-500">
-            Build consistency every single day
+            Completion consistency
           </div>
         </Card>
 
         <Card>
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Productivity Score</span>
-            <div className="p-2 rounded-xl bg-accent-500/10 text-accent-400">
+            <div className="p-2 rounded-xl bg-warning-500/10 text-warning-400">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
@@ -171,52 +183,60 @@ export default function Dashboard() {
             <span className="text-xs text-accent-400 font-medium">Optimal</span>
           </div>
           <div className="mt-2 text-2xs text-slate-500">
-            Based on completed deliverables
+            Daily balance indicator
           </div>
         </Card>
       </div>
 
-      {/* Main Grid: Pending Tasks List & AI Quick Assistant */}
+      {/* Main Grid: Today's Routine Preview & AI Quick Assistant */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Pending Tasks */}
+        {/* Today's Timetable Preview */}
         <div className="lg:col-span-2 space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle icon={Clock}>Pending Deliverables</CardTitle>
-              <Link to="/app/tasks" className="text-xs text-accent-400 hover:text-accent-300 font-medium flex items-center gap-1">
-                View All Tasks ({stats?.total || 0}) <ArrowRight className="w-3.5 h-3.5" />
+              <CardTitle icon={Clock}>Today's Routine Timeline</CardTitle>
+              <Link to="/app/routine" className="text-xs text-accent-400 hover:text-accent-300 font-medium flex items-center gap-1">
+                Full Routine & Timetable <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </CardHeader>
 
             {loading ? (
-              <div className="py-8 text-center text-xs text-slate-500">Loading your tasks...</div>
-            ) : recentTasks.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-500">Loading your timeline...</div>
+            ) : !todaySchedule?.blocks || todaySchedule.blocks.length === 0 ? (
               <div className="py-8 text-center space-y-3">
                 <div className="w-12 h-12 rounded-2xl bg-surface-light/60 flex items-center justify-center mx-auto text-slate-400">
-                  <CheckCircle2 className="w-6 h-6 text-success-400" />
+                  <Calendar className="w-6 h-6" />
                 </div>
-                <h4 className="text-sm font-semibold text-slate-200">No pending tasks right now</h4>
+                <h4 className="text-sm font-semibold text-slate-200">No events scheduled for today yet</h4>
                 <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                  Add college lectures, study goals, or gym sessions to let Mind Tonic schedule your day.
+                  Click below to generate a conflict-free timetable fitting your pending tasks and fixed commitments.
                 </p>
-                <Link to="/app/tasks" className="inline-block mt-2">
-                  <Button size="sm" variant="outline">
-                    Add a Task
-                  </Button>
-                </Link>
+                <Button
+                  onClick={handleGenerateToday}
+                  loading={generating}
+                  size="sm"
+                  icon={Sparkles}
+                >
+                  Generate Daily Timetable
+                </Button>
               </div>
             ) : (
               <div className="space-y-2.5">
-                {recentTasks.map((task) => (
-                  <TaskCard
-                    key={task._id}
-                    task={task}
-                    onToggleComplete={handleToggleComplete}
-                    onEdit={() => {}}
+                {todaySchedule.blocks.slice(0, 5).map((block) => (
+                  <ScheduleBlockCard
+                    key={block._id || `${block.startTime}-${block.title}`}
+                    block={block}
+                    onStatusChange={handleBlockStatus}
                     onDelete={() => {}}
-                    onStatusChange={() => {}}
                   />
                 ))}
+                {todaySchedule.blocks.length > 5 && (
+                  <div className="pt-2 text-center">
+                    <Link to="/app/routine" className="text-xs text-slate-400 hover:text-white">
+                      + {todaySchedule.blocks.length - 5} more blocks in full schedule
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
           </Card>
@@ -232,7 +252,7 @@ export default function Dashboard() {
 
             <div className="space-y-3">
               <p className="text-xs text-slate-300 leading-relaxed">
-                "Hi {user?.name?.split(' ')[0] || 'there'}! Tell me about your day anytime — e.g. 'I have college from 9 AM to 4 PM and want to study Java for 2 hours.' I'll create your schedule and keep tasks balanced."
+                "Hi {user?.name?.split(' ')[0] || 'there'}! Tell me about your day anytime — e.g. 'I have college from 9 AM to 4 PM, want to study Java for 2 hours, and hit the gym.' I'll build your schedule seamlessly."
               </p>
 
               <div className="pt-2">

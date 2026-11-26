@@ -29,6 +29,17 @@ export function formatTime(time) {
 }
 
 /**
+ * Get duration in minutes between two "HH:MM" strings.
+ */
+export function getDuration(startTime, endTime) {
+  const [sh, sm] = startTime.split(':').map(Number);
+  const [eh, em] = endTime.split(':').map(Number);
+  let dur = eh * 60 + em - (sh * 60 + sm);
+  if (dur < 0) dur += 1440;
+  return dur;
+}
+
+/**
  * Format duration in minutes to readable string.
  */
 export function formatDuration(minutes) {
