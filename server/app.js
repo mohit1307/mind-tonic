@@ -60,6 +60,7 @@ app.use('/api/documents', require('./routes/document.routes'));
 app.use('/api/expenses', require('./routes/expense.routes'));
 app.use('/api/notifications', require('./routes/notification.routes'));
 app.use('/api/analytics', require('./routes/analytics.routes'));
+app.use('/api/admin', require('./routes/admin.routes'));
 
 // 404 handler
 app.use(notFoundHandler);

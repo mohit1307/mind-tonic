@@ -147,6 +147,7 @@ async function runTests() {
   const notificationService = require('./services/notification.service');
   const analyticsService = require('./services/analytics.service');
   const aiService = require('./services/ai.service');
+  const adminController = require('./controllers/admin.controller');
 
   assert(typeof taskService.createTask === 'function', 'TaskService.createTask is defined');
   assert(typeof scheduleService.generateSchedule === 'function', 'ScheduleService.generateSchedule is defined');
@@ -158,6 +159,8 @@ async function runTests() {
   assert(typeof notificationService.clearAll === 'function', 'NotificationService.clearAll is defined');
   assert(typeof analyticsService.getAnalyticsOverview === 'function', 'AnalyticsService.getAnalyticsOverview is defined');
   assert(typeof aiService.processMessage === 'function', 'AIService.processMessage is defined');
+  assert(typeof adminController.getOverview === 'function', 'AdminController.getOverview is defined');
+  assert(typeof adminController.updateUserStatus === 'function', 'AdminController.updateUserStatus is defined');
 
   console.log(`\n🎉 ALL ${passedTests}/${totalTests} TESTS PASSED CLEANLY!\n`);
 }

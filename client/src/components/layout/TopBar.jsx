@@ -8,6 +8,7 @@ import {
   Settings,
   LogOut,
   Sparkles,
+  Shield,
 } from 'lucide-react';
 import useAuth from '../../hooks/useAuth';
 import NotificationDropdown from './NotificationDropdown';
@@ -83,6 +84,18 @@ export default function TopBar({ onMenuClick }) {
 
       {/* Right: Quick actions, notifications, dark mode, user avatar */}
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* Admin Switch shortcut if user is admin */}
+        {(user?.role === 'admin' || user?.email === 'admin@mindtonic.ai') && (
+          <button
+            onClick={() => navigate('/admin')}
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-xs font-semibold transition-all shadow-[0_0_12px_rgba(147,51,234,0.25)]"
+            title="Open Admin Panel"
+          >
+            <Shield className="w-3.5 h-3.5 text-purple-400" />
+            <span>Admin Panel</span>
+          </button>
+        )}
+
         {/* Dynamic Notifications Center with badge 3 */}
         <NotificationDropdown />
 
@@ -117,6 +130,19 @@ export default function TopBar({ onMenuClick }) {
                 <p className="text-xs font-bold text-white truncate">{user?.name || 'Mohit Jindal'}</p>
                 <p className="text-[11px] text-slate-400 truncate">{user?.email || 'user@mindtonic.ai'}</p>
               </div>
+
+              {(user?.role === 'admin' || user?.email === 'admin@mindtonic.ai') && (
+                <button
+                  onClick={() => {
+                    navigate('/admin');
+                    setUserDropdownOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-purple-300 hover:text-purple-200 hover:bg-purple-500/15 rounded-xl transition-colors mb-1"
+                >
+                  <Shield className="w-4 h-4 text-purple-400" />
+                  Admin Control Panel
+                </button>
+              )}
 
               <button
                 onClick={() => {

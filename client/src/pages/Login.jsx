@@ -69,6 +69,27 @@ export default function Login() {
     }
   };
 
+  const handleAdminLogin = async () => {
+    setFormData({
+      email: 'admin@mindtonic.ai',
+      password: 'adminpassword123',
+    });
+    setLoading(true);
+    setError('');
+
+    try {
+      await login({
+        email: 'admin@mindtonic.ai',
+        password: 'adminpassword123',
+      });
+      navigate('/admin', { replace: true });
+    } catch (err) {
+      setError(err.message || 'Admin login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-primary-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Background glow effects */}
@@ -96,21 +117,38 @@ export default function Login() {
       {/* Form Card */}
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
         <div className="glass-card p-8 sm:p-10 shadow-2xl border border-white/10">
-          {/* 1-Click Demo Highlight Banner */}
-          <div className="mb-6 p-3.5 rounded-xl bg-accent-500/10 border border-accent-500/30 text-accent-300 text-xs flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-accent-400 flex-shrink-0" />
-              <span>Placement Portfolio Demo Mode Ready</span>
+          {/* 1-Click Demo & Admin Access Buttons */}
+          <div className="mb-6 p-3 rounded-2xl bg-[#141B33] border border-purple-500/30 text-xs space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                Student Demo
+              </span>
+              <button
+                type="button"
+                onClick={handleDemoLogin}
+                disabled={loading}
+                className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[11px] transition-all flex items-center gap-1 shadow-sm"
+              >
+                Enter Student App
+                <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={handleDemoLogin}
-              disabled={loading}
-              className="px-2.5 py-1 rounded-lg bg-accent-500 text-white font-semibold text-xs hover:bg-accent-600 transition-all flex items-center gap-1 shadow-sm"
-            >
-              Enter Demo
-              <ArrowRight className="w-3 h-3" />
-            </button>
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06]">
+              <span className="text-purple-300 font-medium flex items-center gap-1.5">
+                <span className="text-sm">🛡️</span>
+                Admin Panel Demo
+              </span>
+              <button
+                type="button"
+                onClick={handleAdminLogin}
+                disabled={loading}
+                className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-[11px] transition-all flex items-center gap-1 shadow-[0_0_10px_rgba(147,51,234,0.3)]"
+              >
+                Enter Admin Panel
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
           </div>
 
           {error && (

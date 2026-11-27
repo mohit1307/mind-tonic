@@ -7,15 +7,34 @@ const DEMO_USER = {
   email: 'demo@mindtonic.ai',
   college: 'CSE Placement Portfolio',
   semester: 8,
+  role: 'student',
 };
 
 const DEMO_TOKEN = 'demo-token-mind-tonic-session-cse';
+
+const ADMIN_USER = {
+  id: 'a0000000-0000-0000-0000-000000000001',
+  name: 'Admin',
+  email: 'admin@mindtonic.ai',
+  role: 'admin',
+};
+
+const ADMIN_TOKEN = 'admin-token-mind-tonic-session-cse';
 
 export const authService = {
   /**
    * Register a new user using Supabase Auth (with placement demo support)
    */
   async register({ name, email, password }) {
+    if (email === 'admin@mindtonic.ai') {
+      localStorage.setItem('accessToken', ADMIN_TOKEN);
+      localStorage.setItem('refreshToken', 'admin-refresh-token-cse');
+      return {
+        user: ADMIN_USER,
+        session: { access_token: ADMIN_TOKEN },
+      };
+    }
+
     if (email === 'demo@mindtonic.ai') {
       localStorage.setItem('accessToken', DEMO_TOKEN);
       localStorage.setItem('refreshToken', 'demo-refresh-token-cse');
@@ -78,6 +97,15 @@ export const authService = {
    * Login user with Supabase Auth (or 1-Click Demo Login)
    */
   async login({ email, password }) {
+    if (email === 'admin@mindtonic.ai') {
+      localStorage.setItem('accessToken', ADMIN_TOKEN);
+      localStorage.setItem('refreshToken', 'admin-refresh-token-cse');
+      return {
+        user: ADMIN_USER,
+        session: { access_token: ADMIN_TOKEN },
+      };
+    }
+
     if (email === 'demo@mindtonic.ai') {
       localStorage.setItem('accessToken', DEMO_TOKEN);
       localStorage.setItem('refreshToken', 'demo-refresh-token-cse');
