@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, Brain, Sparkles, AlertCircle, ArrowRight } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Brain, Sparkles, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
@@ -62,15 +62,8 @@ export default function Login() {
         password: 'demopassword123',
       });
       navigate(from, { replace: true });
-    } catch (_err) {
-      // If demo user doesn't exist yet, we will register and login automatically
-      try {
-        const { register } = useAuth;
-        // fallback to normal register demo if not found
-        setError('Demo user not found. Please register an account or click Demo Register.');
-      } catch (innerErr) {
-        setError(innerErr.message);
-      }
+    } catch (err) {
+      setError(err.message || 'Demo login failed');
     } finally {
       setLoading(false);
     }
@@ -103,6 +96,23 @@ export default function Login() {
       {/* Form Card */}
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
         <div className="glass-card p-8 sm:p-10 shadow-2xl border border-white/10">
+          {/* 1-Click Demo Highlight Banner */}
+          <div className="mb-6 p-3.5 rounded-xl bg-accent-500/10 border border-accent-500/30 text-accent-300 text-xs flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-accent-400 flex-shrink-0" />
+              <span>Placement Portfolio Demo Mode Ready</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleDemoLogin}
+              disabled={loading}
+              className="px-2.5 py-1 rounded-lg bg-accent-500 text-white font-semibold text-xs hover:bg-accent-600 transition-all flex items-center gap-1 shadow-sm"
+            >
+              Enter Demo
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+
           {error && (
             <div className="mb-6 p-4 rounded-xl bg-danger-500/15 border border-danger-500/30 text-danger-400 text-sm flex items-start gap-3">
               <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
@@ -157,20 +167,16 @@ export default function Login() {
             </Button>
           </form>
 
-          {/* Quick Demo Login */}
+          {/* Quick Demo Login Button */}
           <div className="mt-6 pt-6 border-t border-white/5">
-            <div className="text-center mb-3">
-              <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">
-                For Reviewers & Interviewers
-              </span>
-            </div>
             <button
               type="button"
               onClick={handleDemoLogin}
-              className="w-full py-2.5 px-4 rounded-xl bg-accent-500/10 hover:bg-accent-500/20 border border-accent-500/30 text-accent-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+              disabled={loading}
+              className="w-full py-2.5 px-4 rounded-xl bg-accent-500/15 hover:bg-accent-500/25 border border-accent-500/30 text-accent-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              Quick Demo Account Fill
+              1-Click Demo Login (demo@mindtonic.ai)
             </button>
           </div>
 

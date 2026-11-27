@@ -1,11 +1,30 @@
 import api from './api';
 import { supabase } from './supabaseClient';
 
+const DEMO_USER = {
+  id: 'd3b07384-d113-40f2-b8bb-32e650d03704',
+  name: 'Demo Student',
+  email: 'demo@mindtonic.ai',
+  college: 'CSE Placement Portfolio',
+  semester: 8,
+};
+
+const DEMO_TOKEN = 'demo-token-mind-tonic-session-cse';
+
 export const authService = {
   /**
-   * Register a new user using Supabase Auth
+   * Register a new user using Supabase Auth (with placement demo support)
    */
   async register({ name, email, password }) {
+    if (email === 'demo@mindtonic.ai') {
+      localStorage.setItem('accessToken', DEMO_TOKEN);
+      localStorage.setItem('refreshToken', 'demo-refresh-token-cse');
+      return {
+        user: DEMO_USER,
+        session: { access_token: DEMO_TOKEN },
+      };
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -18,6 +37,9 @@ export const authService = {
     });
 
     if (error) {
+      if (error.message.includes('rate limit')) {
+        throw new Error('Supabase email verification rate limit reached. Click "Quick Demo Account Fill" on the Login page to explore immediately!');
+      }
       throw new Error(error.message);
     }
 
@@ -53,15 +75,30 @@ export const authService = {
   },
 
   /**
-   * Login user with Supabase Auth
+   * Login user with Supabase Auth (or 1-Click Demo Login)
    */
   async login({ email, password }) {
+    if (email === 'demo@mindtonic.ai') {
+      localStorage.setItem('accessToken', DEMO_TOKEN);
+      localStorage.setItem('refreshToken', 'demo-refresh-token-cse');
+      return {
+        user: DEMO_USER,
+        session: { access_token: DEMO_TOKEN },
+      };
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
+      if (error.message.includes('Invalid login credentials')) {
+        throw new Error('Invalid email or password. Click "Create one now" or use the 1-Click Demo Login.');
+      }
+      if (error.message.includes('Email not confirmed')) {
+        throw new Error('Email not yet confirmed. Please verify your email or use the 1-Click Demo Login.');
+      }
       throw new Error(error.message);
     }
 

@@ -2,11 +2,30 @@ const { supabase } = require('../config/supabase');
 const { supabaseDb } = require('../db/supabaseDb');
 const ApiError = require('../utils/apiError');
 
+const DEMO_USER = {
+  id: 'd3b07384-d113-40f2-b8bb-32e650d03704',
+  name: 'Demo Student',
+  email: 'demo@mindtonic.ai',
+  avatar: null,
+  college: 'CSE Placement Portfolio',
+  semester: 8,
+};
+
 class AuthService {
   /**
    * Register a new user with Supabase Auth
    */
   async register({ name, email, password }) {
+    if (email === 'demo@mindtonic.ai') {
+      return {
+        user: DEMO_USER,
+        tokens: {
+          accessToken: 'demo-token-mind-tonic-session-cse',
+          refreshToken: 'demo-refresh-token-cse',
+        },
+      };
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -22,12 +41,14 @@ class AuthService {
       if (error.message.includes('already registered')) {
         throw ApiError.conflict('An account with this email already exists');
       }
+      if (error.message.includes('rate limit')) {
+        throw ApiError.badRequest('Supabase email verification rate limit reached. Please use the 1-Click Demo Account to log in immediately.');
+      }
       throw ApiError.badRequest(error.message);
     }
 
     const user = data.user;
     if (user) {
-      // Best-effort profile creation in Supabase profiles table
       try {
         await supabaseDb.upsert('profiles', {
           id: user.id,
@@ -37,7 +58,7 @@ class AuthService {
           user_id: user.id,
         }, 'user_id');
       } catch (_e) {
-        // Ignored if table is awaiting migration
+        // Fallback store handles it
       }
     }
 
@@ -58,13 +79,26 @@ class AuthService {
    * Login with email and password via Supabase Auth
    */
   async login({ email, password }) {
+    if (email === 'demo@mindtonic.ai') {
+      return {
+        user: DEMO_USER,
+        tokens: {
+          accessToken: 'demo-token-mind-tonic-session-cse',
+          refreshToken: 'demo-refresh-token-cse',
+        },
+      };
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
-      throw ApiError.unauthorized('Invalid email or password');
+      if (error.message.includes('Invalid login credentials')) {
+        throw ApiError.unauthorized('Invalid email or password. Click "Create one now" or use the 1-Click Demo Login.');
+      }
+      throw ApiError.unauthorized(error.message);
     }
 
     const user = data.user;
@@ -85,6 +119,15 @@ class AuthService {
    * Refresh token via Supabase Auth
    */
   async refreshToken(refreshToken) {
+    if (refreshToken === 'demo-refresh-token-cse') {
+      return {
+        tokens: {
+          accessToken: 'demo-token-mind-tonic-session-cse',
+          refreshToken: 'demo-refresh-token-cse',
+        },
+      };
+    }
+
     const { data, error } = await supabase.auth.refreshSession({
       refresh_token: refreshToken,
     });
@@ -108,7 +151,7 @@ class AuthService {
     try {
       await supabase.auth.signOut();
     } catch (_err) {
-      // Ignore if session already terminated
+      // Ignore
     }
     return true;
   }
@@ -117,6 +160,19 @@ class AuthService {
    * Get user profile by id from Supabase PostgreSQL tables
    */
   async getProfile(userId, userMeta = {}) {
+    if (userId === DEMO_USER.id) {
+      return {
+        ...DEMO_USER,
+        preferences: {
+          workingHours: { start: '09:00', end: '18:00' },
+          sleepHours: { start: '23:00', end: '07:00' },
+          breakDuration: 15,
+          timezone: 'Asia/Kolkata',
+          theme: 'dark',
+        },
+      };
+    }
+
     let profile = null;
     let prefs = null;
 
@@ -124,7 +180,7 @@ class AuthService {
       profile = await supabaseDb.findOne('profiles', { id: userId });
       prefs = await supabaseDb.findOne('user_preferences', { user_id: userId });
     } catch (_e) {
-      // Fallback if table not yet migrated
+      // Fallback
     }
 
     const full_name = profile?.full_name || userMeta.name || userMeta.full_name || 'User';

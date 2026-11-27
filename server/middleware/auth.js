@@ -2,8 +2,8 @@ const { supabase } = require('../config/supabase');
 const ApiError = require('../utils/apiError');
 
 /**
- * Supabase JWT authentication middleware.
- * Validates the Bearer token with Supabase Auth and attaches user data to req.user.
+ * Supabase JWT authentication middleware with placement demo support.
+ * Validates the Bearer token with Supabase Auth (or demo session) and attaches user data to req.user.
  */
 const auth = async (req, _res, next) => {
   try {
@@ -19,7 +19,20 @@ const auth = async (req, _res, next) => {
       throw ApiError.unauthorized('No authorization token provided');
     }
 
-    // Verify token with Supabase Auth
+    // 1. Support placement demo reviewer session
+    if (token.startsWith('demo-token')) {
+      req.user = {
+        id: 'd3b07384-d113-40f2-b8bb-32e650d03704',
+        email: 'demo@mindtonic.ai',
+        name: 'Demo Student',
+        avatar: null,
+        college: 'CSE Placement Portfolio',
+        semester: 8,
+      };
+      return next();
+    }
+
+    // 2. Verify token with Supabase Auth
     const { data, error } = await supabase.auth.getUser(token);
 
     if (error || !data?.user) {

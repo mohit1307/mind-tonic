@@ -4,14 +4,41 @@ import { supabase } from '../services/supabaseClient';
 
 export const AuthContext = createContext(null);
 
+const DEMO_USER = {
+  id: 'd3b07384-d113-40f2-b8bb-32e650d03704',
+  name: 'Demo Student',
+  email: 'demo@mindtonic.ai',
+  college: 'CSE Placement Portfolio',
+  semester: 8,
+};
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Initialize auth state from Supabase session
+  // Initialize auth state from token / Supabase session
   const loadUser = useCallback(async () => {
     try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      // Check demo session token
+      if (token.startsWith('demo-token')) {
+        try {
+          const profile = await authService.getMe();
+          setUser(profile || DEMO_USER);
+        } catch (_e) {
+          setUser(DEMO_USER);
+        }
+        setLoading(false);
+        return;
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setUser(null);
@@ -44,6 +71,9 @@ export function AuthProvider({ children }) {
 
     // Listen for Supabase auth state transitions
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const token = localStorage.getItem('accessToken');
+      if (token?.startsWith('demo-token')) return;
+
       if (event === 'SIGNED_IN' && session) {
         localStorage.setItem('accessToken', session.access_token);
         try {
