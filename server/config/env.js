@@ -20,6 +20,8 @@ const env = {
   CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
   MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE, 10) || 10485760,
   UPLOAD_DIR: process.env.UPLOAD_DIR || './uploads',
+  SUPABASE_URL: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vyjqzwjgtgominrllmzf.supabase.co',
+  SUPABASE_KEY: process.env.SUPABASE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Vh5JlR_HjQe2MWsjf2n9jw_1IM3iXEx',
 };
 
 function validateEnv() {
