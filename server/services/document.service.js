@@ -1,9 +1,29 @@
 const fs = require('fs');
 const path = require('path');
-const Document = require('../models/Document');
-const Expense = require('../models/Expense');
+const { supabaseDb } = require('../db/supabaseDb');
 const ocrProcessor = require('../utils/ocrProcessor');
 const ApiError = require('../utils/apiError');
+
+function mapDocToApi(doc) {
+  if (!doc) return null;
+  return {
+    _id: doc.id,
+    id: doc.id,
+    userId: doc.user_id,
+    title: doc.title,
+    originalName: doc.original_name,
+    fileName: path.basename(doc.file_path || ''),
+    filePath: doc.file_path,
+    fileType: doc.file_type,
+    fileSize: doc.file_size,
+    category: doc.category || 'receipt',
+    ocrStatus: doc.ocr_status || 'pending',
+    ocrText: doc.ocr_text || '',
+    ocrData: doc.ocr_data || {},
+    createdAt: doc.created_at,
+    updatedAt: doc.updated_at,
+  };
+}
 
 class DocumentService {
   /**
@@ -13,120 +33,129 @@ class DocumentService {
     if (!file) throw ApiError.badRequest('No file uploaded');
 
     const title = data.title?.trim() || file.originalname;
-    const category = data.category || 'other';
-
-    // Parse tags if passed as comma-separated or stringified array
-    let tags = [];
-    if (Array.isArray(data.tags)) {
-      tags = data.tags;
-    } else if (typeof data.tags === 'string' && data.tags.trim()) {
-      try {
-        tags = JSON.parse(data.tags);
-      } catch {
-        tags = data.tags.split(',').map((t) => t.trim()).filter(Boolean);
-      }
-    }
-
-    // Determine initial OCR status
+    const category = data.category || 'receipt';
     const isImage = file.mimetype.startsWith('image/');
-    const initialOcrStatus = isImage ? 'processing' : 'not_applicable';
+    const initialOcrStatus = isImage ? 'processing' : 'completed';
 
-    const doc = await Document.create({
-      userId,
+    const row = {
+      user_id: userId,
       title,
-      originalName: file.originalname,
-      fileName: file.filename,
-      filePath: file.path,
-      fileType: file.mimetype,
-      fileSize: file.size,
+      original_name: file.originalname,
+      file_path: file.path,
+      file_type: file.mimetype,
+      file_size: file.size,
       category,
-      tags,
-      ocrStatus: initialOcrStatus,
-    });
+      ocr_status: initialOcrStatus,
+      ocr_text: '',
+      ocr_data: {},
+    };
 
-    // Run OCR asynchronously for images so upload returns quickly or complete if immediate
+    const doc = await supabaseDb.insert('documents', row);
+
+    // Process OCR if image
     if (isImage) {
       try {
         const { ocrText, ocrData } = await ocrProcessor.processFile(file.path, file.mimetype);
-        doc.ocrText = ocrText;
-        doc.ocrData = ocrData;
-        doc.ocrStatus = 'completed';
-
-        // Auto-categorize document if OCR detects high confidence category
-        if (category === 'other' && ocrData.detectedCategory === 'college_fee') {
-          doc.category = 'fee_challan';
-        } else if (category === 'other' && ocrData.amount) {
-          doc.category = 'receipt';
+        let finalCategory = category;
+        if (category === 'other' || category === 'receipt') {
+          if (ocrData.detectedCategory === 'college_fee') finalCategory = 'fee_slip';
         }
 
-        await doc.save();
+        const updated = await supabaseDb.update(
+          'documents',
+          { id: doc.id },
+          {
+            ocr_text: ocrText,
+            ocr_data: ocrData,
+            ocr_status: 'completed',
+            category: finalCategory,
+          }
+        );
+        return mapDocToApi(updated?.[0] || doc);
       } catch (ocrErr) {
-        doc.ocrStatus = 'failed';
-        doc.ocrText = `OCR failed: ${ocrErr.message}`;
-        await doc.save();
+        await supabaseDb.update(
+          'documents',
+          { id: doc.id },
+          {
+            ocr_status: 'failed',
+            ocr_text: `OCR failed: ${ocrErr.message}`,
+          }
+        );
       }
     }
 
-    return doc;
+    return mapDocToApi(doc);
   }
 
   /**
    * Get all user documents with optional category and search filters
    */
   async getDocuments(userId, { category, search, ocrStatus } = {}) {
-    const query = { userId };
+    let q = supabaseDb.client
+      .from('documents')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
     if (category && category !== 'all') {
-      query.category = category;
+      q = q.eq('category', category);
     }
 
     if (ocrStatus) {
-      query.ocrStatus = ocrStatus;
+      q = q.eq('ocr_status', ocrStatus);
     }
 
-    if (search) {
-      const regex = new RegExp(search, 'i');
-      query.$or = [{ title: regex }, { originalName: regex }, { tags: regex }, { ocrText: regex }];
+    if (search && search.trim()) {
+      q = q.or(`title.ilike.%${search.trim()}%,original_name.ilike.%${search.trim()}%`);
     }
 
-    const docs = await Document.find(query).sort({ createdAt: -1 });
-    return docs;
+    const { data: docs } = await q;
+    return (docs || []).map(mapDocToApi);
   }
 
   /**
    * Get single document
    */
   async getDocumentById(userId, documentId) {
-    const doc = await Document.findOne({ _id: documentId, userId });
+    const doc = await supabaseDb.findById('documents', documentId, userId);
     if (!doc) throw ApiError.notFound('Document not found');
-    return doc;
+    return mapDocToApi(doc);
   }
 
   /**
    * Re-run OCR processing on an existing document
    */
   async reprocessOCR(userId, documentId) {
-    const doc = await Document.findOne({ _id: documentId, userId });
+    const doc = await supabaseDb.findById('documents', documentId, userId);
     if (!doc) throw ApiError.notFound('Document not found');
 
-    if (!doc.fileType.startsWith('image/')) {
+    if (!doc.file_type.startsWith('image/')) {
       throw ApiError.badRequest('OCR is only supported for image documents (JPG, PNG, WebP)');
     }
 
-    doc.ocrStatus = 'processing';
-    await doc.save();
+    await supabaseDb.update('documents', { id: documentId }, { ocr_status: 'processing' });
 
     try {
-      const { ocrText, ocrData } = await ocrProcessor.processFile(doc.filePath, doc.fileType);
-      doc.ocrText = ocrText;
-      doc.ocrData = ocrData;
-      doc.ocrStatus = 'completed';
-      await doc.save();
-      return doc;
+      const { ocrText, ocrData } = await ocrProcessor.processFile(doc.file_path, doc.file_type);
+      const updated = await supabaseDb.update(
+        'documents',
+        { id: documentId },
+        {
+          ocr_text: ocrText,
+          ocr_data: ocrData,
+          ocr_status: 'completed',
+        }
+      );
+      return mapDocToApi(updated?.[0] || doc);
     } catch (err) {
-      doc.ocrStatus = 'failed';
-      doc.ocrText = `OCR failed: ${err.message}`;
-      await doc.save();
+      await supabaseDb.update(
+        'documents',
+        { id: documentId },
+        {
+          ocr_status: 'failed',
+          ocr_text: `OCR failed: ${err.message}`,
+        }
+      );
       throw ApiError.internal(`OCR processing failed: ${err.message}`);
     }
   }
@@ -135,24 +164,22 @@ class DocumentService {
    * Delete document and remove physical file from disk
    */
   async deleteDocument(userId, documentId) {
-    const doc = await Document.findOne({ _id: documentId, userId });
+    const doc = await supabaseDb.findById('documents', documentId, userId);
     if (!doc) throw ApiError.notFound('Document not found');
 
     // Unlink physical file
     try {
-      if (fs.existsSync(doc.filePath)) {
-        fs.unlinkSync(doc.filePath);
+      if (fs.existsSync(doc.file_path)) {
+        fs.unlinkSync(doc.file_path);
       }
     } catch (err) {
-      console.warn(`Could not delete file on disk: ${doc.filePath}`, err.message);
+      console.warn(`Could not delete file on disk: ${doc.file_path}`, err.message);
     }
 
-    // Unlink from any linked expense
-    if (doc.expenseId) {
-      await Expense.findByIdAndUpdate(doc.expenseId, { documentId: null });
-    }
+    // Unlink any expense referring to this document
+    await supabaseDb.update('expenses', { document_id: documentId }, { document_id: null });
 
-    await doc.deleteOne();
+    await supabaseDb.delete('documents', { id: documentId, user_id: userId });
     return { message: 'Document deleted successfully' };
   }
 }

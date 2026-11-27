@@ -1,183 +1,189 @@
-const Expense = require('../models/Expense');
-const Document = require('../models/Document');
+const { supabaseDb } = require('../db/supabaseDb');
 const ApiError = require('../utils/apiError');
 const { normalizeDate } = require('../utils/timeUtils');
+
+function mapExpenseToApi(e, doc = null) {
+  if (!e) return null;
+  return {
+    _id: e.id,
+    id: e.id,
+    userId: e.user_id,
+    title: e.title,
+    amount: Number(e.amount),
+    category: e.category || 'other',
+    paymentMethod: e.payment_method || 'upi',
+    date: e.date,
+    isCollegeFee: Boolean(e.is_college_fee),
+    feeDetails: e.fee_details || {},
+    status: e.status || 'paid',
+    dueDate: e.due_date || null,
+    documentId: doc ? { _id: doc.id, id: doc.id, title: doc.title, originalName: doc.original_name } : e.document_id,
+    notes: e.notes || '',
+    createdAt: e.created_at,
+    updatedAt: e.updated_at,
+  };
+}
 
 class ExpenseService {
   /**
    * Create a new expense
    */
   async createExpense(userId, data) {
-    const date = normalizeDate(data.date || new Date());
+    const dateStr = (data.date ? new Date(data.date) : new Date()).toISOString().split('T')[0];
+    const isCollegeFee = Boolean(data.isCollegeFee || data.category === 'college_fee');
 
-    const isCollegeFee =
-      data.isCollegeFee || data.category === 'college_fee';
+    const row = {
+      user_id: userId,
+      title: data.title.trim(),
+      amount: Number(data.amount) || 0,
+      category: data.category || (isCollegeFee ? 'college_fee' : 'other'),
+      payment_method: data.paymentMethod || 'upi',
+      date: dateStr,
+      is_college_fee: isCollegeFee,
+      fee_details: data.feeDetails || {},
+      status: data.status || 'paid',
+      due_date: data.dueDate ? new Date(data.dueDate).toISOString().split('T')[0] : null,
+      document_id: data.documentId || null,
+      notes: data.notes || '',
+    };
 
-    const expense = await Expense.create({
-      userId,
-      ...data,
-      date,
-      isCollegeFee,
-    });
-
-    // If a document was linked, update document's reference
-    if (data.documentId) {
-      await Document.findOneAndUpdate(
-        { _id: data.documentId, userId },
-        { isLinkedToExpense: true, expenseId: expense._id }
-      );
-    }
-
-    return expense;
+    const expense = await supabaseDb.insert('expenses', row);
+    return mapExpenseToApi(expense);
   }
 
   /**
    * 1-Click create expense from OCR extracted receipt data
    */
   async createFromOCR(userId, documentId, customData = {}) {
-    const doc = await Document.findOne({ _id: documentId, userId });
+    const doc = await supabaseDb.findById('documents', documentId, userId);
     if (!doc) throw ApiError.notFound('Document not found');
 
-    const ocr = doc.ocrData || {};
+    const ocr = doc.ocr_data || {};
     const amount = customData.amount || ocr.amount;
     if (!amount) {
       throw ApiError.badRequest('Could not determine expense amount from OCR. Please enter manually.');
     }
 
-    const title =
-      customData.title ||
-      ocr.vendor ||
-      doc.title ||
-      'Scanned Receipt Expense';
-
+    const title = customData.title || ocr.vendor || doc.title || 'Scanned Receipt Expense';
     const category =
       customData.category ||
       ocr.detectedCategory ||
-      (doc.category === 'fee_challan' ? 'college_fee' : 'personal');
+      (doc.category === 'fee_slip' ? 'college_fee' : 'other');
 
-    const date = normalizeDate(customData.date || ocr.date || new Date());
+    const dateStr = (customData.date || ocr.date ? new Date(customData.date || ocr.date) : new Date())
+      .toISOString()
+      .split('T')[0];
+
     const isCollegeFee = category === 'college_fee';
 
-    const expense = await Expense.create({
-      userId,
+    const row = {
+      user_id: userId,
       title,
-      amount,
+      amount: Number(amount),
       category,
-      paymentMethod: customData.paymentMethod || 'upi',
-      date,
-      isCollegeFee,
-      documentId: doc._id,
-      feeDetails: customData.feeDetails || {},
+      payment_method: customData.paymentMethod || 'upi',
+      date: dateStr,
+      is_college_fee: isCollegeFee,
+      document_id: doc.id,
+      fee_details: customData.feeDetails || {},
       status: customData.status || 'paid',
-      notes: customData.notes || `Extracted via OCR from document "${doc.originalName}"`,
-    });
+      notes: customData.notes || `Extracted via OCR from document "${doc.original_name}"`,
+    };
 
-    // Mark document as linked
-    doc.isLinkedToExpense = true;
-    doc.expenseId = expense._id;
-    await doc.save();
-
-    return expense;
+    const expense = await supabaseDb.insert('expenses', row);
+    return mapExpenseToApi(expense, doc);
   }
 
   /**
    * Get filtered expenses
    */
   async getExpenses(userId, { category, status, isCollegeFee, startDate, endDate, search, limit = 50 } = {}) {
-    const query = { userId };
+    let q = supabaseDb.client
+      .from('expenses')
+      .select('*, documents(id, title, original_name)')
+      .eq('user_id', userId)
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(Number(limit));
 
     if (category && category !== 'all') {
-      query.category = category;
+      q = q.eq('category', category);
     }
 
     if (status && status !== 'all') {
-      query.status = status;
+      q = q.eq('status', status);
     }
 
     if (isCollegeFee !== undefined && isCollegeFee !== '') {
-      query.isCollegeFee = isCollegeFee === 'true' || isCollegeFee === true;
+      q = q.eq('is_college_fee', String(isCollegeFee) === 'true');
     }
 
-    if (startDate || endDate) {
-      query.date = {};
-      if (startDate) query.date.$gte = normalizeDate(startDate);
-      if (endDate) query.date.$lte = normalizeDate(endDate);
+    if (startDate) {
+      q = q.gte('date', new Date(startDate).toISOString().split('T')[0]);
+    }
+    if (endDate) {
+      q = q.lte('date', new Date(endDate).toISOString().split('T')[0]);
     }
 
-    if (search) {
-      const regex = new RegExp(search, 'i');
-      query.$or = [{ title: regex }, { notes: regex }];
+    if (search && search.trim()) {
+      q = q.or(`title.ilike.%${search.trim()}%,notes.ilike.%${search.trim()}%`);
     }
 
-    const expenses = await Expense.find(query)
-      .populate('documentId', 'title fileName fileType fileSize')
-      .sort({ date: -1, createdAt: -1 })
-      .limit(Number(limit));
+    const { data: expenses } = await q;
 
-    return expenses;
+    return (expenses || []).map((e) => mapExpenseToApi(e, e.documents));
   }
 
   /**
    * Get single expense
    */
   async getExpenseById(userId, expenseId) {
-    const expense = await Expense.findOne({ _id: expenseId, userId }).populate(
-      'documentId',
-      'title fileName fileType fileSize ocrText ocrData'
-    );
+    const { data: expense } = await supabaseDb.client
+      .from('expenses')
+      .select('*, documents(id, title, original_name, file_type, file_size, ocr_text, ocr_data)')
+      .eq('id', expenseId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
     if (!expense) throw ApiError.notFound('Expense not found');
-    return expense;
+    return mapExpenseToApi(expense, expense.documents);
   }
 
   /**
    * Update expense
    */
   async updateExpense(userId, expenseId, data) {
-    const expense = await Expense.findOne({ _id: expenseId, userId });
-    if (!expense) throw ApiError.notFound('Expense not found');
+    const existing = await supabaseDb.findById('expenses', expenseId, userId);
+    if (!existing) throw ApiError.notFound('Expense not found');
 
-    if (data.date) data.date = normalizeDate(data.date);
-    if (data.category === 'college_fee') data.isCollegeFee = true;
-
-    // Handle document linking change
-    if (data.documentId !== undefined && data.documentId !== expense.documentId?.toString()) {
-      // Unlink previous document
-      if (expense.documentId) {
-        await Document.findByIdAndUpdate(expense.documentId, {
-          isLinkedToExpense: false,
-          expenseId: null,
-        });
-      }
-      // Link new document
-      if (data.documentId) {
-        await Document.findOneAndUpdate(
-          { _id: data.documentId, userId },
-          { isLinkedToExpense: true, expenseId: expense._id }
-        );
-      }
+    const updates = {};
+    if (data.title !== undefined) updates.title = data.title.trim();
+    if (data.amount !== undefined) updates.amount = Number(data.amount);
+    if (data.category !== undefined) {
+      updates.category = data.category;
+      if (data.category === 'college_fee') updates.is_college_fee = true;
     }
+    if (data.paymentMethod !== undefined) updates.payment_method = data.paymentMethod;
+    if (data.date !== undefined) updates.date = new Date(data.date).toISOString().split('T')[0];
+    if (data.isCollegeFee !== undefined) updates.is_college_fee = Boolean(data.isCollegeFee);
+    if (data.feeDetails !== undefined) updates.fee_details = data.feeDetails;
+    if (data.status !== undefined) updates.status = data.status;
+    if (data.dueDate !== undefined) updates.due_date = data.dueDate ? new Date(data.dueDate).toISOString().split('T')[0] : null;
+    if (data.documentId !== undefined) updates.document_id = data.documentId || null;
+    if (data.notes !== undefined) updates.notes = data.notes;
 
-    Object.assign(expense, data);
-    await expense.save();
-    return expense;
+    const updated = await supabaseDb.update('expenses', { id: expenseId, user_id: userId }, updates);
+    return this.getExpenseById(userId, expenseId);
   }
 
   /**
    * Delete expense
    */
   async deleteExpense(userId, expenseId) {
-    const expense = await Expense.findOne({ _id: expenseId, userId });
-    if (!expense) throw ApiError.notFound('Expense not found');
+    const existing = await supabaseDb.findById('expenses', expenseId, userId);
+    if (!existing) throw ApiError.notFound('Expense not found');
 
-    // Unlink document
-    if (expense.documentId) {
-      await Document.findByIdAndUpdate(expense.documentId, {
-        isLinkedToExpense: false,
-        expenseId: null,
-      });
-    }
-
-    await expense.deleteOne();
+    await supabaseDb.delete('expenses', { id: expenseId, user_id: userId });
     return { message: 'Expense deleted successfully' };
   }
 
@@ -191,30 +197,42 @@ class ExpenseService {
 
     const startOfMonth = new Date(Date.UTC(targetYear, targetMonth, 1));
     const endOfMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0, 23, 59, 59, 999));
+    const startStr = startOfMonth.toISOString().split('T')[0];
+    const endStr = endOfMonth.toISOString().split('T')[0];
 
-    const [monthExpenses, allCollegeFees, recentExpenses] = await Promise.all([
-      Expense.find({
-        userId,
-        date: { $gte: startOfMonth, $lte: endOfMonth },
-      }),
-      Expense.find({
-        userId,
-        isCollegeFee: true,
-      }),
-      Expense.find({ userId })
-        .populate('documentId', 'title')
-        .sort({ date: -1, createdAt: -1 })
+    const [monthExpensesRes, allCollegeFeesRes, recentRes] = await Promise.all([
+      supabaseDb.client
+        .from('expenses')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('date', startStr)
+        .lte('date', endStr),
+      supabaseDb.client
+        .from('expenses')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_college_fee', true),
+      supabaseDb.client
+        .from('expenses')
+        .select('*, documents(title)')
+        .eq('user_id', userId)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(5),
     ]);
 
-    // Calculate monthly total
+    const monthExpenses = monthExpensesRes.data || [];
+    const allCollegeFees = allCollegeFeesRes.data || [];
+    const recentExpenses = (recentRes.data || []).map((e) => mapExpenseToApi(e, e.documents));
+
     let totalSpentThisMonth = 0;
     const categoryTotals = {};
 
     monthExpenses.forEach((exp) => {
       if (exp.status === 'paid') {
-        totalSpentThisMonth += exp.amount;
-        categoryTotals[exp.category] = (categoryTotals[exp.category] || 0) + exp.amount;
+        const amt = Number(exp.amount) || 0;
+        totalSpentThisMonth += amt;
+        categoryTotals[exp.category] = (categoryTotals[exp.category] || 0) + amt;
       }
     });
 
@@ -224,17 +242,17 @@ class ExpenseService {
       percentage: totalSpentThisMonth > 0 ? Math.round((amt / totalSpentThisMonth) * 100) : 0,
     }));
 
-    // College fee stats
     let totalCollegeFeesPaid = 0;
     let pendingFeesCount = 0;
     let pendingFeesAmount = 0;
 
     allCollegeFees.forEach((f) => {
+      const amt = Number(f.amount) || 0;
       if (f.status === 'paid') {
-        totalCollegeFeesPaid += f.amount;
+        totalCollegeFeesPaid += amt;
       } else {
         pendingFeesCount++;
-        pendingFeesAmount += f.amount;
+        pendingFeesAmount += amt;
       }
     });
 
