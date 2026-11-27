@@ -1,10 +1,16 @@
 const app = require('./app');
-const connectDB = require('./config/db');
+const { testSupabaseConnection } = require('./config/supabase');
 const env = require('./config/env');
 
 const startServer = async () => {
-  // Connect to MongoDB
-  await connectDB();
+  // Test connectivity to Supabase PostgreSQL
+  console.log('🔗 Connecting to Supabase PostgreSQL...');
+  const conn = await testSupabaseConnection();
+  if (conn.connected) {
+    console.log(`✅ Supabase PostgreSQL connected: ${conn.url}`);
+  } else {
+    console.warn(`⚠️  Supabase connectivity warning: ${conn.error}`);
+  }
 
   // Initialize background cron jobs
   const jobManager = require('./jobs');
@@ -18,9 +24,11 @@ const startServer = async () => {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
 
-  // Start the server
+  // Start the Express server
   const server = app.listen(env.PORT, () => {
     console.log(`\n🧠 Mind Tonic API Server`);
+    console.log(`   Database:    Supabase PostgreSQL`);
+    console.log(`   Auth:        Supabase Auth`);
     console.log(`   Environment: ${env.NODE_ENV}`);
     console.log(`   Port:        ${env.PORT}`);
     console.log(`   URL:         http://localhost:${env.PORT}`);
@@ -31,11 +39,8 @@ const startServer = async () => {
   const shutdown = (signal) => {
     console.log(`\n${signal} received. Shutting down gracefully...`);
     server.close(() => {
-      const mongoose = require('mongoose');
-      mongoose.connection.close(false, () => {
-        console.log('MongoDB connection closed.');
-        process.exit(0);
-      });
+      console.log('Mind Tonic API Server closed.');
+      process.exit(0);
     });
 
     // Force shutdown after 10 seconds

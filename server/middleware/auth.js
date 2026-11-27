@@ -48,4 +48,7 @@ const auth = async (req, _res, next) => {
   }
 };
 
+auth.authenticate = auth;
+auth.auth = auth;
+
 module.exports = auth;

@@ -25,30 +25,15 @@ const errorHandler = (err, req, res, _next) => {
     );
   }
 
-  // Mongoose validation error
-  if (err.name === 'ValidationError') {
-    const details = Object.values(err.errors).map((e) => ({
-      field: e.path,
-      message: e.message,
-    }));
-    return apiResponse.error(res, 422, 'Validation failed', 'VALIDATION_ERROR', details);
+  // PostgreSQL / Supabase errors
+  if (err.code === '23505') {
+    return apiResponse.error(res, 409, 'A record with these details already exists', 'DUPLICATE_KEY');
   }
-
-  // Mongoose duplicate key error
-  if (err.code === 11000) {
-    const field = Object.keys(err.keyValue)[0];
-    return apiResponse.error(
-      res,
-      409,
-      `${field} already exists`,
-      'DUPLICATE_KEY',
-      { field, value: err.keyValue[field] }
-    );
+  if (err.code === '23503') {
+    return apiResponse.error(res, 400, 'Referenced record does not exist or has active dependencies', 'FOREIGN_KEY_VIOLATION');
   }
-
-  // Mongoose cast error (invalid ObjectId, etc.)
-  if (err.name === 'CastError') {
-    return apiResponse.error(res, 400, `Invalid ${err.path}: ${err.value}`, 'INVALID_ID');
+  if (err.code === 'PGRST116') {
+    return apiResponse.error(res, 404, 'Requested resource not found', 'NOT_FOUND');
   }
 
   // JWT errors

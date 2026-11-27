@@ -32,10 +32,18 @@ app.use('/api', generalLimiter);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health check
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', async (_req, res) => {
+  const { testSupabaseConnection } = require('./config/supabase');
+  const dbStatus = await testSupabaseConnection();
   res.json({
     success: true,
     message: 'Mind Tonic API is running',
+    database: {
+      provider: 'Supabase PostgreSQL',
+      connected: dbStatus.connected,
+      url: dbStatus.url,
+    },
+    auth: 'Supabase Auth',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
   });
