@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/constants';
+import { supabase } from './supabaseClient';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -9,65 +10,47 @@ const api = axios.create({
   },
 });
 
-// Request interceptor — attach JWT token
+// Request interceptor — attach Supabase access token
 api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+  async (config) => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token || localStorage.getItem('accessToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (_err) {
+      const fallbackToken = localStorage.getItem('accessToken');
+      if (fallbackToken) {
+        config.headers.Authorization = `Bearer ${fallbackToken}`;
+      }
     }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Response interceptor — handle token refresh and errors
+// Response interceptor — handle unauthorized and normalize errors
 api.interceptors.response.use(
   (response) => response.data,
   async (error) => {
-    const originalRequest = error.config;
-
-    // If 401 and we haven't tried refreshing yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-
+    if (error.response?.status === 401) {
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (!refreshToken) {
-          throw new Error('No refresh token');
-        }
-
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-          refreshToken,
-        });
-
-        const { accessToken } = response.data.data;
-        localStorage.setItem('accessToken', accessToken);
-
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-        return api(originalRequest);
-      } catch (refreshError) {
-        // Refresh failed — clear tokens and redirect to login
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
+        await supabase.auth.signOut();
+      } catch (_e) {
+        // ignore
       }
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
     }
 
-    // Format error for consumers
     const message =
       error.response?.data?.error?.message ||
       error.response?.data?.message ||
       error.message ||
       'An unexpected error occurred';
 
-    return Promise.reject({
-      message,
-      status: error.response?.status,
-      code: error.response?.data?.error?.code,
-      details: error.response?.data?.error?.details,
-    });
+    return Promise.reject(new Error(message));
   }
 );
 

@@ -1,36 +1,98 @@
 import api from './api';
+import { supabase } from './supabaseClient';
 
 export const authService = {
   /**
-   * Register a new user
+   * Register a new user using Supabase Auth
    */
   async register({ name, email, password }) {
-    const response = await api.post('/auth/register', { name, email, password });
-    if (response.data?.tokens) {
-      localStorage.setItem('accessToken', response.data.tokens.accessToken);
-      localStorage.setItem('refreshToken', response.data.tokens.refreshToken);
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name,
+          full_name: name,
+        },
+      },
+    });
+
+    if (error) {
+      throw new Error(error.message);
     }
-    return response.data;
+
+    if (data.session?.access_token) {
+      localStorage.setItem('accessToken', data.session.access_token);
+      localStorage.setItem('refreshToken', data.session.refresh_token || '');
+    }
+
+    let user = null;
+    if (data.session) {
+      try {
+        user = await this.getMe();
+      } catch (_e) {
+        user = {
+          id: data.user?.id,
+          name: name,
+          email: email,
+        };
+      }
+    } else {
+      user = {
+        id: data.user?.id,
+        name: name,
+        email: email,
+        emailConfirmationPending: true,
+      };
+    }
+
+    return {
+      user,
+      session: data.session,
+    };
   },
 
   /**
-   * Login user
+   * Login user with Supabase Auth
    */
   async login({ email, password }) {
-    const response = await api.post('/auth/login', { email, password });
-    if (response.data?.tokens) {
-      localStorage.setItem('accessToken', response.data.tokens.accessToken);
-      localStorage.setItem('refreshToken', response.data.tokens.refreshToken);
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      throw new Error(error.message);
     }
-    return response.data;
+
+    if (data.session?.access_token) {
+      localStorage.setItem('accessToken', data.session.access_token);
+      localStorage.setItem('refreshToken', data.session.refresh_token || '');
+    }
+
+    let user = null;
+    try {
+      user = await this.getMe();
+    } catch (_e) {
+      user = {
+        id: data.user?.id,
+        name: data.user?.user_metadata?.name || data.user?.email?.split('@')[0],
+        email: data.user?.email,
+      };
+    }
+
+    return {
+      user,
+      session: data.session,
+    };
   },
 
   /**
-   * Logout user
+   * Logout user via Supabase Auth
    */
   async logout() {
     try {
-      await api.post('/auth/logout');
+      await supabase.auth.signOut();
     } catch (_err) {
       // Continue even if network error on logout
     } finally {
@@ -40,11 +102,11 @@ export const authService = {
   },
 
   /**
-   * Get current authenticated user profile
+   * Get current authenticated user profile from backend
    */
   async getMe() {
     const response = await api.get('/auth/me');
-    return response.data.user;
+    return response.data?.user || response.data;
   },
 
   /**
@@ -52,22 +114,20 @@ export const authService = {
    */
   async updateProfile(updates) {
     const response = await api.put('/auth/profile', updates);
-    return response.data.user;
+    return response.data?.user || response.data;
   },
 
   /**
-   * Change user password
+   * Change user password via Supabase Auth
    */
-  async changePassword({ currentPassword, newPassword }) {
-    const response = await api.put('/auth/password', {
-      currentPassword,
-      newPassword,
+  async changePassword({ newPassword }) {
+    const { data, error } = await supabase.auth.updateUser({
+      password: newPassword,
     });
-    if (response.data?.tokens) {
-      localStorage.setItem('accessToken', response.data.tokens.accessToken);
-      localStorage.setItem('refreshToken', response.data.tokens.refreshToken);
+    if (error) {
+      throw new Error(error.message);
     }
-    return response.data;
+    return { message: 'Password changed successfully', user: data.user };
   },
 };
 

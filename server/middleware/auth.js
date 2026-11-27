@@ -1,30 +1,42 @@
-const jwt = require('jsonwebtoken');
+const { supabase } = require('../config/supabase');
 const ApiError = require('../utils/apiError');
-const env = require('../config/env');
 
 /**
- * JWT authentication middleware.
- * Extracts token from Authorization header, verifies it,
- * and attaches the decoded user payload to req.user.
+ * Supabase JWT authentication middleware.
+ * Validates the Bearer token with Supabase Auth and attaches user data to req.user.
  */
-const auth = (req, _res, next) => {
+const auth = async (req, _res, next) => {
   try {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw ApiError.unauthorized('No token provided');
+      throw ApiError.unauthorized('No authorization token provided');
     }
 
     const token = authHeader.split(' ')[1];
 
     if (!token) {
-      throw ApiError.unauthorized('No token provided');
+      throw ApiError.unauthorized('No authorization token provided');
     }
 
-    const decoded = jwt.verify(token, env.JWT_SECRET);
+    // Verify token with Supabase Auth
+    const { data, error } = await supabase.auth.getUser(token);
+
+    if (error || !data?.user) {
+      throw ApiError.unauthorized('Invalid or expired Supabase authentication token');
+    }
+
+    const user = data.user;
     req.user = {
-      id: decoded.id,
-      email: decoded.email,
+      id: user.id,
+      email: user.email,
+      name:
+        user.user_metadata?.name ||
+        user.user_metadata?.full_name ||
+        user.email?.split('@')[0] ||
+        'User',
+      avatar: user.user_metadata?.avatar_url || null,
+      ...user.user_metadata,
     };
 
     next();
@@ -32,13 +44,7 @@ const auth = (req, _res, next) => {
     if (error instanceof ApiError) {
       return next(error);
     }
-    if (error.name === 'TokenExpiredError') {
-      return next(ApiError.unauthorized('Token expired'));
-    }
-    if (error.name === 'JsonWebTokenError') {
-      return next(ApiError.unauthorized('Invalid token'));
-    }
-    next(error);
+    return next(ApiError.unauthorized(error.message || 'Authentication required'));
   }
 };
 

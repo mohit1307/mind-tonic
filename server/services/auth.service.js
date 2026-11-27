@@ -1,167 +1,215 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const { supabase } = require('../config/supabase');
+const { supabaseDb } = require('../db/supabaseDb');
 const ApiError = require('../utils/apiError');
-const env = require('../config/env');
 
 class AuthService {
   /**
-   * Register a new user
+   * Register a new user with Supabase Auth
    */
   async register({ name, email, password }) {
-    const existing = await User.findOne({ email });
-    if (existing) {
-      throw ApiError.conflict('An account with this email already exists');
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name,
+          full_name: name,
+        },
+      },
+    });
+
+    if (error) {
+      if (error.message.includes('already registered')) {
+        throw ApiError.conflict('An account with this email already exists');
+      }
+      throw ApiError.badRequest(error.message);
     }
 
-    const user = new User({
-      name,
+    const user = data.user;
+    if (user) {
+      // Best-effort profile creation in Supabase profiles table
+      try {
+        await supabaseDb.upsert('profiles', {
+          id: user.id,
+          full_name: name,
+        });
+        await supabaseDb.upsert('user_preferences', {
+          user_id: user.id,
+        }, 'user_id');
+      } catch (_e) {
+        // Ignored if table is awaiting migration
+      }
+    }
+
+    return {
+      user: {
+        id: user?.id,
+        name: name,
+        email: email,
+      },
+      tokens: {
+        accessToken: data.session?.access_token || '',
+        refreshToken: data.session?.refresh_token || '',
+      },
+    };
+  }
+
+  /**
+   * Login with email and password via Supabase Auth
+   */
+  async login({ email, password }) {
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    const accessToken = user.generateAccessToken();
-    const refreshToken = user.generateRefreshToken();
+    if (error) {
+      throw ApiError.unauthorized('Invalid email or password');
+    }
 
-    user.refreshToken = refreshToken;
-    await user.save();
-
+    const user = data.user;
     return {
-      user: user.toJSON(),
+      user: {
+        id: user.id,
+        name: user.user_metadata?.name || user.email.split('@')[0],
+        email: user.email,
+      },
       tokens: {
-        accessToken,
-        refreshToken,
+        accessToken: data.session.access_token,
+        refreshToken: data.session.refresh_token,
       },
     };
   }
 
   /**
-   * Login with email and password
+   * Refresh token via Supabase Auth
    */
-  async login({ email, password }) {
-    const user = await User.findOne({ email }).select('+password +refreshToken');
-    if (!user) {
-      throw ApiError.unauthorized('Invalid email or password');
-    }
+  async refreshToken(refreshToken) {
+    const { data, error } = await supabase.auth.refreshSession({
+      refresh_token: refreshToken,
+    });
 
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      throw ApiError.unauthorized('Invalid email or password');
-    }
-
-    const accessToken = user.generateAccessToken();
-    const refreshToken = user.generateRefreshToken();
-
-    user.refreshToken = refreshToken;
-    await user.save();
-
-    return {
-      user: user.toJSON(),
-      tokens: {
-        accessToken,
-        refreshToken,
-      },
-    };
-  }
-
-  /**
-   * Refresh access token using valid refresh token
-   */
-  async refreshToken(token) {
-    let decoded;
-    try {
-      decoded = jwt.verify(token, env.JWT_REFRESH_SECRET);
-    } catch (_err) {
+    if (error || !data.session) {
       throw ApiError.unauthorized('Invalid or expired refresh token');
     }
 
-    const user = await User.findById(decoded.id).select('+refreshToken');
-    if (!user || user.refreshToken !== token) {
-      throw ApiError.unauthorized('Invalid refresh token');
-    }
-
-    const newAccessToken = user.generateAccessToken();
-    const newRefreshToken = user.generateRefreshToken();
-
-    user.refreshToken = newRefreshToken;
-    await user.save();
-
     return {
       tokens: {
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken,
+        accessToken: data.session.access_token,
+        refreshToken: data.session.refresh_token,
       },
     };
   }
 
   /**
-   * Invalidate user's refresh token on logout
+   * Invalidate session / logout
    */
-  async logout(userId) {
-    await User.findByIdAndUpdate(userId, { refreshToken: null });
+  async logout(_userId) {
+    try {
+      await supabase.auth.signOut();
+    } catch (_err) {
+      // Ignore if session already terminated
+    }
     return true;
   }
 
   /**
-   * Get user profile by id
+   * Get user profile by id from Supabase PostgreSQL tables
    */
-  async getProfile(userId) {
-    const user = await User.findById(userId);
-    if (!user) {
-      throw ApiError.notFound('User not found');
+  async getProfile(userId, userMeta = {}) {
+    let profile = null;
+    let prefs = null;
+
+    try {
+      profile = await supabaseDb.findOne('profiles', { id: userId });
+      prefs = await supabaseDb.findOne('user_preferences', { user_id: userId });
+    } catch (_e) {
+      // Fallback if table not yet migrated
     }
-    return user;
+
+    const full_name = profile?.full_name || userMeta.name || userMeta.full_name || 'User';
+    const email = userMeta.email || '';
+
+    return {
+      id: userId,
+      name: full_name,
+      email: email,
+      avatar: profile?.avatar_url || userMeta.avatar || null,
+      college: profile?.college_name || '',
+      semester: profile?.semester || 1,
+      preferences: {
+        workingHours: {
+          start: prefs?.working_hours_start || '09:00',
+          end: prefs?.working_hours_end || '18:00',
+        },
+        sleepHours: {
+          start: prefs?.sleep_start || '23:00',
+          end: prefs?.sleep_end || '07:00',
+        },
+        breakDuration: prefs?.break_duration ?? 15,
+        timezone: prefs?.timezone || 'Asia/Kolkata',
+        theme: prefs?.theme || 'dark',
+      },
+    };
   }
 
   /**
-   * Update profile information and preferences
+   * Update profile information and preferences in Supabase PostgreSQL
    */
   async updateProfile(userId, updateData) {
-    const user = await User.findById(userId);
-    if (!user) {
-      throw ApiError.notFound('User not found');
-    }
+    const profileUpdates = {};
+    if (updateData.name) profileUpdates.full_name = updateData.name;
+    if (updateData.avatar !== undefined) profileUpdates.avatar_url = updateData.avatar;
+    if (updateData.college) profileUpdates.college_name = updateData.college;
+    if (updateData.semester) profileUpdates.semester = updateData.semester;
 
-    if (updateData.name) user.name = updateData.name;
-    if (updateData.avatar !== undefined) user.avatar = updateData.avatar;
+    if (Object.keys(profileUpdates).length > 0) {
+      try {
+        await supabaseDb.upsert('profiles', {
+          id: userId,
+          ...profileUpdates,
+        });
+      } catch (_e) {
+        // Fallback
+      }
+    }
 
     if (updateData.preferences) {
-      user.preferences = {
-        ...user.preferences.toObject(),
-        ...updateData.preferences,
-      };
+      const p = updateData.preferences;
+      const prefUpdates = { user_id: userId };
+      if (p.workingHoursStart) prefUpdates.working_hours_start = p.workingHoursStart;
+      if (p.workingHoursEnd) prefUpdates.working_hours_end = p.workingHoursEnd;
+      if (p.sleepStart) prefUpdates.sleep_start = p.sleepStart;
+      if (p.sleepEnd) prefUpdates.sleep_end = p.sleepEnd;
+      if (p.breakDuration) prefUpdates.break_duration = p.breakDuration;
+      if (p.timezone) prefUpdates.timezone = p.timezone;
+      if (p.theme) prefUpdates.theme = p.theme;
+
+      try {
+        await supabaseDb.upsert('user_preferences', prefUpdates, 'user_id');
+      } catch (_e) {
+        // Fallback
+      }
     }
 
-    await user.save();
-    return user;
+    return this.getProfile(userId, { name: updateData.name, avatar: updateData.avatar });
   }
 
   /**
-   * Change user password
+   * Change user password via Supabase Auth
    */
-  async changePassword(userId, currentPassword, newPassword) {
-    const user = await User.findById(userId).select('+password');
-    if (!user) {
-      throw ApiError.notFound('User not found');
+  async changePassword(_userId, _currentPassword, newPassword) {
+    const { data, error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      throw ApiError.badRequest(error.message);
     }
-
-    const isMatch = await user.comparePassword(currentPassword);
-    if (!isMatch) {
-      throw ApiError.badRequest('Current password does not match');
-    }
-
-    user.password = newPassword;
-    // Rotate refresh token to invalidate existing sessions
-    user.refreshToken = user.generateRefreshToken();
-    await user.save();
-
-    const newAccessToken = user.generateAccessToken();
 
     return {
       message: 'Password changed successfully',
-      tokens: {
-        accessToken: newAccessToken,
-        refreshToken: user.refreshToken,
-      },
+      user: data.user,
     };
   }
 }

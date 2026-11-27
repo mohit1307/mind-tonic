@@ -41,7 +41,7 @@ class AuthController {
 
   async getMe(req, res, next) {
     try {
-      const user = await authService.getProfile(req.user.id);
+      const user = await authService.getProfile(req.user.id, req.user);
       return apiResponse.success(res, { user }, 'Profile retrieved');
     } catch (error) {
       next(error);
