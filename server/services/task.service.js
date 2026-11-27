@@ -139,7 +139,20 @@ class TaskService {
 
     const { data, error, count } = await q;
     if (error) {
-      throw ApiError.badRequest(`Failed to query tasks: ${error.message}`);
+      console.warn('getTasks fallback:', error.message);
+      const fallback = typeof supabaseDb._memoryFindMany === 'function'
+        ? supabaseDb._memoryFindMany('tasks', { user_id: userId }, { limit: limitNum, offset })
+        : { data: [], count: 0 };
+      const tasks = (fallback.data || []).map(mapTaskToApi);
+      return {
+        tasks,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: fallback.count || tasks.length,
+          totalPages: Math.ceil((fallback.count || tasks.length) / limitNum) || 1,
+        },
+      };
     }
 
     const tasks = (data || []).map(mapTaskToApi);
