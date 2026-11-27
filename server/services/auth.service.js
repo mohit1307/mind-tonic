@@ -190,6 +190,7 @@ class AuthService {
       id: userId,
       name: full_name,
       email: email,
+      role: userMeta.role || (email === 'admin@mindtonic.ai' ? 'admin' : 'user'),
       avatar: profile?.avatar_url || userMeta.avatar || null,
       college: profile?.college_name || '',
       semester: profile?.semester || 1,

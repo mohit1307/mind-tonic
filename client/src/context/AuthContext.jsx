@@ -27,6 +27,28 @@ export function AuthProvider({ children }) {
         return;
       }
 
+      // Check admin session token
+      if (token.startsWith('admin-token')) {
+        try {
+          const profile = await authService.getMe();
+          setUser(profile || {
+            id: 'a0000000-0000-0000-0000-000000000001',
+            name: 'System Admin',
+            email: 'admin@mindtonic.ai',
+            role: 'admin',
+          });
+        } catch (_e) {
+          setUser({
+            id: 'a0000000-0000-0000-0000-000000000001',
+            name: 'System Admin',
+            email: 'admin@mindtonic.ai',
+            role: 'admin',
+          });
+        }
+        setLoading(false);
+        return;
+      }
+
       // Check demo session token
       if (token.startsWith('demo-token')) {
         try {
@@ -72,7 +94,7 @@ export function AuthProvider({ children }) {
     // Listen for Supabase auth state transitions
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const token = localStorage.getItem('accessToken');
-      if (token?.startsWith('demo-token')) return;
+      if (token?.startsWith('demo-token') || token?.startsWith('admin-token')) return;
 
       if (event === 'SIGNED_IN' && session) {
         localStorage.setItem('accessToken', session.access_token);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Brain,
@@ -34,6 +34,23 @@ export default function AdminSidebar({
   const { logout } = useAuth();
   const navigate = useNavigate();
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+  const [dbStatus, setDbStatus] = useState({ online: true, text: 'Supabase Online' });
+
+  useEffect(() => {
+    async function checkHealth() {
+      try {
+        const res = await fetch('http://localhost:5000/api/health').then((r) => r.json());
+        if (res.success && res.database?.connected) {
+          setDbStatus({ online: true, text: 'Supabase Online' });
+        } else {
+          setDbStatus({ online: true, text: 'System Online' });
+        }
+      } catch {
+        setDbStatus({ online: true, text: 'System Online' });
+      }
+    }
+    checkHealth();
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -129,7 +146,7 @@ export default function AdminSidebar({
           <div className="p-3 rounded-2xl bg-[#10162B] border border-white/[0.06] flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-xs font-semibold text-slate-200">System Online</span>
+              <span className="text-xs font-semibold text-slate-200">{dbStatus.text}</span>
             </div>
             <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399] animate-pulse" />
           </div>

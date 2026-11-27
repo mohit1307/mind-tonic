@@ -97,6 +97,20 @@ export default function AdminDashboard() {
       try {
         const res = await adminService.getOverview();
         if (res) {
+          const logIconMap = {
+            user: CheckCircle2,
+            calendar: Calendar,
+            expense: Receipt,
+            ai: Zap,
+            system: CheckCircle2,
+          };
+          const logColorMap = {
+            emerald: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
+            purple: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
+            amber: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+            blue: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
+          };
+
           setData((prev) => ({
             ...prev,
             metrics: res.metrics || prev.metrics,
@@ -109,6 +123,15 @@ export default function AdminDashboard() {
                   active: true,
                 }))
               : prev.recentUsers,
+            activityLogs: res.activityLogs
+              ? res.activityLogs.map((l) => ({
+                  id: l.id,
+                  title: l.title,
+                  time: l.time,
+                  icon: logIconMap[l.iconType] || CheckCircle2,
+                  color: logColorMap[l.color] || logColorMap.purple,
+                }))
+              : prev.activityLogs,
           }));
         }
       } catch (err) {

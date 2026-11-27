@@ -14,8 +14,13 @@ const api = axios.create({
 api.interceptors.request.use(
   async (config) => {
     try {
+      const localToken = localStorage.getItem('accessToken');
+      if (localToken && (localToken.startsWith('admin-token') || localToken.startsWith('demo-token'))) {
+        config.headers.Authorization = `Bearer ${localToken}`;
+        return config;
+      }
       const { data } = await supabase.auth.getSession();
-      const token = data?.session?.access_token || localStorage.getItem('accessToken');
+      const token = data?.session?.access_token || localToken;
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -35,13 +40,16 @@ api.interceptors.response.use(
   (response) => response.data,
   async (error) => {
     if (error.response?.status === 401) {
-      try {
-        await supabase.auth.signOut();
-      } catch (_e) {
-        // ignore
+      const token = localStorage.getItem('accessToken');
+      if (!token?.startsWith('admin-token') && !token?.startsWith('demo-token')) {
+        try {
+          await supabase.auth.signOut();
+        } catch (_e) {
+          // ignore
+        }
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
       }
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
     }
 
     const message =
