@@ -1,9 +1,5 @@
 const cron = require('node-cron');
-const Schedule = require('../models/Schedule');
-const Habit = require('../models/Habit');
-const HabitLog = require('../models/HabitLog');
-const Expense = require('../models/Expense');
-const Subject = require('../models/Subject');
+const { supabaseDb } = require('../db/supabaseDb');
 const notificationService = require('../services/notification.service');
 const { timeToMinutes, normalizeDate } = require('../utils/timeUtils');
 
@@ -41,42 +37,50 @@ class JobManager {
       const currentMins = now.getHours() * 60 + now.getMinutes();
       const todayStr = now.toISOString().split('T')[0];
 
-      const schedules = await Schedule.find({ date: todayStr });
+      const { data: schedules } = await supabaseDb.client
+        .from('schedules')
+        .select('id, user_id, date')
+        .eq('date', todayStr);
+
+      if (!schedules || schedules.length === 0) return;
 
       for (const sched of schedules) {
-        for (const block of sched.blocks) {
-          if (block.status !== 'scheduled' || block.type === 'sleep') continue;
+        const { data: events } = await supabaseDb.client
+          .from('schedule_events')
+          .select('*')
+          .eq('schedule_id', sched.id);
 
-          const sMins = timeToMinutes(block.startTime);
+        for (const block of events || []) {
+          if (block.status !== 'pending' && block.status !== 'scheduled') continue;
+          if (block.type === 'sleep') continue;
+
+          const sMins = timeToMinutes(block.start_time);
           const diff = sMins - currentMins;
 
           // If block starts in 5 to 25 minutes
           if (diff >= 5 && diff <= 25) {
-            // Check if reminder was already sent today
-            const exists = await notificationService.getNotifications(sched.userId, {
+            const exists = await notificationService.getNotifications(sched.user_id, {
               limit: 5,
             });
             const alreadySent = exists.some(
-              (n) =>
-                n.type === 'reminder' &&
-                n.metadata?.blockId === block._id.toString()
+              (n) => n.type === 'schedule' && n.metadata?.eventId === block.id
             );
 
             if (!alreadySent) {
-              await notificationService.createNotification(sched.userId, {
+              await notificationService.createNotification(sched.user_id, {
                 title: `Upcoming: ${block.title}`,
-                message: `Your ${block.type === 'fixed' ? 'fixed commitment' : 'study session'} starts at ${block.startTime} (in ${diff} mins).`,
-                type: 'reminder',
+                message: `Your ${block.type === 'fixed' ? 'fixed commitment' : 'scheduled session'} starts at ${block.start_time} (in ${diff} mins).`,
+                type: 'schedule',
                 priority: block.type === 'fixed' ? 'high' : 'medium',
                 link: '/app/routine',
-                metadata: { blockId: block._id.toString(), startTime: block.startTime },
+                metadata: { eventId: block.id, startTime: block.start_time },
               });
             }
           }
         }
       }
     } catch (err) {
-      console.warn('Reminder scan job error:', err.message);
+      console.warn('Reminder scan job notice:', err.message);
     }
   }
 
@@ -85,28 +89,32 @@ class JobManager {
    */
   async runStreakWarningScan() {
     try {
-      const today = normalizeDate(new Date());
-      const habits = await Habit.find({ isActive: true, currentStreak: { $gte: 2 } });
+      const todayStr = new Date().toISOString().split('T')[0];
+      const { data: habits } = await supabaseDb.client
+        .from('habits')
+        .select('*')
+        .eq('is_active', true)
+        .gte('current_streak', 2);
 
-      for (const habit of habits) {
-        const loggedToday = await HabitLog.findOne({
-          habitId: habit._id,
-          date: today,
+      for (const habit of habits || []) {
+        const loggedToday = await supabaseDb.findOne('habit_logs', {
+          habit_id: habit.id,
+          date: todayStr,
         });
 
         if (!loggedToday) {
-          await notificationService.createNotification(habit.userId, {
-            title: `Keep Your ${habit.currentStreak}-Day Streak Alive! 🔥`,
+          await notificationService.createNotification(habit.user_id, {
+            title: `Keep Your ${habit.current_streak}-Day Streak Alive! 🔥`,
             message: `You haven't checked in on "${habit.name}" today. Complete it before midnight to keep your streak!`,
-            type: 'streak_warning',
+            type: 'habit',
             priority: 'high',
             link: '/app/habits',
-            metadata: { habitId: habit._id.toString() },
+            metadata: { habitId: habit.id },
           });
         }
       }
     } catch (err) {
-      console.warn('Streak warning job error:', err.message);
+      console.warn('Streak warning job notice:', err.message);
     }
   }
 
@@ -117,24 +125,28 @@ class JobManager {
     try {
       const now = new Date();
       const threeDaysLater = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+      const todayStr = now.toISOString().split('T')[0];
+      const dueLimitStr = threeDaysLater.toISOString().split('T')[0];
 
-      const dueExpenses = await Expense.find({
-        status: { $in: ['pending', 'due_soon'] },
-        dueDate: { $lte: threeDaysLater, $gte: now },
-      });
+      const { data: dueExpenses } = await supabaseDb.client
+        .from('expenses')
+        .select('*')
+        .neq('status', 'paid')
+        .gte('due_date', todayStr)
+        .lte('due_date', dueLimitStr);
 
-      for (const exp of dueExpenses) {
-        await notificationService.createNotification(exp.userId, {
+      for (const exp of dueExpenses || []) {
+        await notificationService.createNotification(exp.user_id, {
           title: `Fee Due Alert: ${exp.title}`,
-          message: `Amount ₹${exp.amount.toLocaleString()} is due on ${new Date(exp.dueDate).toLocaleDateString()}.`,
-          type: 'fee_due',
+          message: `Amount ₹${Number(exp.amount).toLocaleString()} is due on ${exp.due_date}.`,
+          type: 'expense',
           priority: 'high',
           link: '/app/expenses',
-          metadata: { expenseId: exp._id.toString() },
+          metadata: { expenseId: exp.id },
         });
       }
     } catch (err) {
-      console.warn('Fee due job error:', err.message);
+      console.warn('Fee due job notice:', err.message);
     }
   }
 }

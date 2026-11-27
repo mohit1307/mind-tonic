@@ -1,10 +1,4 @@
-const Task = require('../models/Task');
-const Schedule = require('../models/Schedule');
-const Habit = require('../models/Habit');
-const HabitLog = require('../models/HabitLog');
-const StudySession = require('../models/StudySession');
-const Subject = require('../models/Subject');
-const Expense = require('../models/Expense');
+const { supabaseDb } = require('../db/supabaseDb');
 const { normalizeDate } = require('../utils/timeUtils');
 
 class AnalyticsService {
@@ -14,126 +8,111 @@ class AnalyticsService {
   async getAnalyticsOverview(userId) {
     const today = normalizeDate(new Date());
 
-    // 1. Fetch data in parallel
-    const [tasks, habits, studySessions, subjects, expenses] = await Promise.all([
-      Task.find({ userId }),
-      Habit.find({ userId, isActive: true }),
-      StudySession.find({
-        userId,
-        date: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-      }).sort({ date: 1 }),
-      Subject.find({ userId }),
-      Expense.find({ userId }),
+    // 1. Fetch data from Supabase PostgreSQL in parallel
+    const [tasksRes, habitsRes, sessionsRes, expensesRes] = await Promise.all([
+      supabaseDb.client.from('tasks').select('*').eq('user_id', userId),
+      supabaseDb.client.from('habits').select('*').eq('user_id', userId).eq('is_active', true),
+      supabaseDb.client
+        .from('study_sessions')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('date', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]),
+      supabaseDb.client.from('expenses').select('*').eq('user_id', userId),
     ]);
+
+    const tasks = tasksRes.data || [];
+    const habits = habitsRes.data || [];
+    const studySessions = sessionsRes.data || [];
+    const expenses = expensesRes.data || [];
 
     // 2. Task metrics
     let completedTasks = 0;
     let pendingTasks = 0;
     let inProgressTasks = 0;
     let overdueTasks = 0;
+    const now = new Date();
 
     tasks.forEach((t) => {
       if (t.status === 'completed') completedTasks++;
       else if (t.status === 'in_progress') inProgressTasks++;
       else pendingTasks++;
 
-      if (t.isOverdue) overdueTasks++;
+      if (t.status !== 'completed' && t.deadline && new Date(t.deadline) < now) {
+        overdueTasks++;
+      }
     });
 
     const totalTasks = tasks.length;
-    const taskCompletionRate =
-      totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
     // 3. 7-Day Focus Study Trend
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const focusTrend7Days = [];
     let total7DayFocusMins = 0;
-    const now = new Date();
 
     for (let i = 6; i >= 0; i--) {
       const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i, 0, 0, 0, 0));
       const dStr = d.toISOString().split('T')[0];
-      const daySessions = studySessions.filter((s) => {
-        const sDate = new Date(s.date).toISOString().split('T')[0];
-        return sDate === dStr;
-      });
+      const daySessions = studySessions.filter((s) => s.date === dStr);
 
-      const mins = daySessions.reduce((acc, curr) => acc + curr.durationMinutes, 0);
-      total7DayFocusMins += mins;
+      const dayMins = daySessions.reduce((acc, s) => acc + (Number(s.duration_minutes) || 0), 0);
+      total7DayFocusMins += dayMins;
 
       focusTrend7Days.push({
         date: dStr,
         day: dayNames[d.getUTCDay()],
-        focusMinutes: mins,
-        focusHours: Number((mins / 60).toFixed(1)),
+        hours: Number((dayMins / 60).toFixed(1)),
         sessionsCount: daySessions.length,
       });
     }
 
-    // 4. Habit Consistency
-    let totalHabitStreaks = 0;
-    const habitStats = habits.map((h) => {
-      totalHabitStreaks += h.currentStreak || 0;
-      return {
-        habitId: h._id,
-        name: h.name,
-        currentStreak: h.currentStreak,
-        longestStreak: h.longestStreak,
-        category: h.category,
-      };
+    // 4. Habit metrics
+    let bestHabitStreak = 0;
+    let totalStreakDays = 0;
+    habits.forEach((h) => {
+      if ((h.current_streak || 0) > bestHabitStreak) bestHabitStreak = h.current_streak;
+      totalStreakDays += h.current_streak || 0;
     });
 
-    const avgStreak = habits.length > 0 ? Math.round(totalHabitStreaks / habits.length) : 0;
+    const habitConsistencyScore =
+      habits.length > 0 ? Math.min(100, Math.round((totalStreakDays / (habits.length * 7)) * 100)) : 0;
 
-    // 5. Composite Productivity Score (0 to 100%)
-    // 40% task rate, 30% habit consistency, 30% focus hours
-    const taskScore = taskCompletionRate * 0.4;
-    const habitScore = Math.min(100, avgStreak * 20) * 0.3;
-    const focusScore = Math.min(100, (total7DayFocusMins / (7 * 120)) * 100) * 0.3; // 2 hrs/day target
+    // 5. Expense & College Fee summary
+    let upcomingFeeDuesCount = 0;
+    let totalFeeDuesAmount = 0;
 
-    const productivityScore = Math.min(100, Math.round(taskScore + habitScore + focusScore));
+    expenses.forEach((e) => {
+      if (e.is_college_fee && e.status !== 'paid') {
+        upcomingFeeDuesCount++;
+        totalFeeDuesAmount += Number(e.amount) || 0;
+      }
+    });
 
-    let scoreGrade = 'B (Solid Progress)';
-    if (productivityScore >= 90) scoreGrade = 'A+ (Peak Flow State)';
-    else if (productivityScore >= 75) scoreGrade = 'A (High Velocity)';
-    else if (productivityScore >= 60) scoreGrade = 'B (Consistent)';
-    else if (productivityScore >= 40) scoreGrade = 'C (Building Momentum)';
-    else scoreGrade = 'D (Needs Focus)';
+    // 6. Overall Mind Tonic Productivity Index (0 - 100)
+    const taskWeight = taskCompletionRate * 0.4;
+    const habitWeight = habitConsistencyScore * 0.3;
+    const focusTargetHours = 20; // 20 hours/week goal
+    const focusHoursAchieved = total7DayFocusMins / 60;
+    const focusWeight = Math.min(100, (focusHoursAchieved / focusTargetHours) * 100) * 0.3;
 
-    // 6. Context-Aware AI Daily Summary Generator
-    let aiSummary = `You have completed ${completedTasks} of ${totalTasks} deliverables with a ${taskCompletionRate}% completion rate. `;
-    if (total7DayFocusMins > 0) {
-      aiSummary += `Over the last 7 days, you dedicated ${(total7DayFocusMins / 60).toFixed(1)} hours to focused study. `;
-    } else {
-      aiSummary += `Use the Focus Timer today to build study momentum on your course subjects. `;
-    }
-
-    if (habits.length > 0 && avgStreak > 0) {
-      aiSummary += `Your daily habits are performing steadily with an average streak of ${avgStreak} days. `;
-    }
-
-    const pendingFees = expenses.filter((e) => e.isCollegeFee && e.status !== 'paid');
-    if (pendingFees.length > 0) {
-      aiSummary += `Note: You have ${pendingFees.length} pending college fee challan(s) due soon.`;
-    }
+    const overallProductivityScore = Math.min(100, Math.round(taskWeight + habitWeight + focusWeight));
 
     return {
-      productivityScore,
-      scoreGrade,
-      taskMetrics: {
+      metrics: {
+        taskCompletionRate,
         totalTasks,
         completedTasks,
         pendingTasks,
-        inProgressTasks,
         overdueTasks,
-        taskCompletionRate,
+        habitStreakBest: bestHabitStreak,
+        habitConsistencyScore,
+        totalFocusHours7Days: Number((total7DayFocusMins / 60).toFixed(1)),
+        upcomingFeeDuesCount,
+        totalFeeDuesAmount: Number(totalFeeDuesAmount.toFixed(2)),
+        overallProductivityScore,
       },
-      focusTrend7Days,
-      total7DayFocusHours: Number((total7DayFocusMins / 60).toFixed(1)),
-      habitStats,
-      avgStreak,
-      subjectsCount: subjects.length,
-      aiSummary,
+      focusTrend: focusTrend7Days,
+      generatedAt: new Date().toISOString(),
     };
   }
 }
