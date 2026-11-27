@@ -54,22 +54,26 @@
 │  [ Dashboard ]  [ Routine ]  [ Tasks ]  [ Habits ]  [ AI Voice Assistant ]   │
 │  [ Learning (SM-2) ]  [ Documents (OCR) ]  [ Expenses ]  [ Analytics ]      │
 └──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │ HTTP / REST (JWT Auth)
+                                       │ HTTP / REST (Supabase Bearer JWT)
 ┌──────────────────────────────────────▼──────────────────────────────────────┐
 │                         BACKEND (Node.js + Express)                         │
 │                                                                             │
-│  ├── Middleware: JWT Auth, Joi Validation, Multer Upload, Error Handlers    │
+│  ├── Middleware: Supabase Auth JWT Verification, Joi, Multer, Error Handlers│
 │  ├── Scheduling Engine: 288-Slot Timeline Constraint Algorithm              │
 │  ├── Spaced Repetition Engine: SuperMemo SM-2 Formula Processor             │
 │  ├── OCR Engine: Tesseract.js Text Recognition + Heuristic Regex Extractor  │
 │  ├── AI Engine: Live Context Assembly + Structured Action Proposal Engine   │
-│  └── Cron Jobs: Node-Cron Reminders, Streak Preservers, Fee Due Alerts      │
+│  ├── Cron Jobs: Node-Cron Reminders, Streak Preservers, Fee Due Alerts      │
+│  └── Data Access: Supabase PostgreSQL Relational Adapter Layer              │
 └──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │ Mongoose ODM
+                                       │ PostgreSQL 15 + RLS
 ┌──────────────────────────────────────▼──────────────────────────────────────┐
-│                            DATABASE (MongoDB)                               │
-│  Collections: Users, Tasks, Schedules, Habits, HabitLogs, Subjects,         │
-│               StudySessions, Documents, Expenses, Notifications, AIConvos   │
+│                  DATABASE & AUTH (Supabase Cloud Platform)                  │
+│  Tables: profiles, user_preferences, tasks, schedules, schedule_events,    │
+│          habits, habit_logs, study_subjects, study_sessions,                │
+│          revision_schedules, notifications, documents, expenses,            │
+│          ai_conversations                                                   │
+│  Security: PostgreSQL Row Level Security (RLS) on all 14 tables             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -78,6 +82,11 @@
 ## 💻 Tech Stack
 
 | Layer | Technologies |
+|---|---|
+| **Frontend** | React 18, Vite, Tailwind CSS v3, React Router v6, Axios, Recharts, Lucide React, Web Speech API |
+| **Backend** | Node.js, Express 5, REST API Architecture, Joi, Multer, Node-Cron, Tesseract.js |
+| **Database & Auth** | **Supabase PostgreSQL 15**, **Supabase Auth**, **Supabase Storage**, **PostgreSQL Row Level Security (RLS)** |
+| **AI & NLP** | Intent Parsing Engine, Safe Action Proposals, Spaced Repetition SM-2, Heuristic OCR |
 |---|---|
 | **Frontend** | React 19, Vite, Tailwind CSS v3, React Router v6, Axios, Recharts, Lucide React, Web Speech API |
 | **Backend** | Node.js, Express.js (REST API), JSON Web Tokens (Access + Refresh Rotation), bcryptjs, Joi, Multer |
