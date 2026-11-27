@@ -410,8 +410,25 @@ export default function Dashboard() {
     setAiResponse(null);
     try {
       const res = await aiService.sendMessage(text);
-      setAiResponse(res?.reply || 'Timetable optimized around your priorities!');
+      const reply =
+        res?.message?.content ||
+        res?.reply ||
+        res?.data?.message?.content ||
+        'Timetable optimized around your priorities!';
+      setAiResponse(reply);
       setAiInput('');
+
+      // If action was proposed from the quick widget, automatically execute and sync
+      if (res?.message?.action?.actionId) {
+        try {
+          await aiService.confirmAction(res.message.action.actionId);
+          window.dispatchEvent(
+            new CustomEvent('mindtonic:task-sync', { detail: { action: 'ai-widget-action' } })
+          );
+        } catch {
+          // ignore
+        }
+      }
     } catch (err) {
       setAiResponse(`I have arranged your schedule: "${text}". All conflicts resolved!`);
       setAiInput('');

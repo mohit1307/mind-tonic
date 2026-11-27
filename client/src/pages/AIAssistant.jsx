@@ -120,11 +120,23 @@ export default function AIAssistant() {
 
     try {
       const response = await aiService.sendMessage(text, conversationId);
-      if (response.data?.conversationId) {
-        setConversationId(response.data.conversationId);
+      const incomingMsg = response?.message || response?.data?.message;
+      const cId = response?.conversationId || response?.data?.conversationId;
+
+      if (cId) {
+        setConversationId(cId);
       }
-      if (response.data?.message) {
-        setMessages((prev) => [...prev, response.data.message]);
+      if (incomingMsg) {
+        setMessages((prev) => [...prev, incomingMsg]);
+      } else if (response?.reply) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: response.reply,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
       }
     } catch (err) {
       setError(err.message || 'Failed to communicate with AI Assistant');
@@ -143,6 +155,11 @@ export default function AIAssistant() {
   const handleConfirmAction = async (actionId) => {
     try {
       const result = await aiService.confirmAction(actionId);
+      // Dispatch global task and timetable sync
+      window.dispatchEvent(
+        new CustomEvent('mindtonic:task-sync', { detail: { action: 'ai-action' } })
+      );
+
       // Update local message action status to executed
       setMessages((prev) =>
         prev.map((msg) => {

@@ -6,7 +6,7 @@ export const aiService = {
    */
   async sendMessage(message, conversationId = null) {
     const response = await api.post('/ai/chat', { message, conversationId });
-    return response.data;
+    return response.data || response;
   },
 
   /**
@@ -14,7 +14,7 @@ export const aiService = {
    */
   async confirmAction(actionId) {
     const response = await api.post(`/ai/actions/${actionId}/confirm`);
-    return response.data;
+    return response.data || response;
   },
 
   /**
@@ -22,7 +22,7 @@ export const aiService = {
    */
   async rejectAction(actionId) {
     const response = await api.post(`/ai/actions/${actionId}/reject`);
-    return response.data;
+    return response.data || response;
   },
 
   /**

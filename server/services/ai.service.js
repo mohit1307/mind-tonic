@@ -77,6 +77,7 @@ class AIService {
     return {
       conversationId: conversation.id,
       message: assistantMsg,
+      reply: finalReply,
     };
   }
 
@@ -217,7 +218,10 @@ class AIService {
     }
 
     // Pattern 3: Create Task
-    const createMatch = cleanMsg.match(/(?:add task|create task|remind me to|i need to|schedule)\s+(.+)/i);
+    const createMatch =
+      cleanMsg.match(/(?:add\s+(?:a\s+|the\s+)?task|create\s+(?:a\s+|the\s+)?task|new\s+task|remind\s+me\s+to|i\s+want\s+to\s+add\s+(?:a\s+|the\s+)?task|i\s+need\s+to(?:\s+add)?)\s*[:\-]?\s*(.+)/i) ||
+      cleanMsg.match(/^(?:add|create)\s+(.+)/i);
+
     if (createMatch) {
       const fullTaskStr = createMatch[1].trim();
       const extracted = this._extractTaskDetails(fullTaskStr);
@@ -241,6 +245,27 @@ class AIService {
       };
     }
 
+    // Pattern 3.5: Complete / Mark Task Done
+    const doneMatch = cleanMsg.match(/(?:mark|complete|finish|done)\s+(?:task\s+)?(.+)/i);
+    if (doneMatch && context.pendingTasks.length > 0) {
+      const taskQuery = doneMatch[1].trim().toLowerCase();
+      const matched = context.pendingTasks.find((t) => t.title.toLowerCase().includes(taskQuery));
+      if (matched) {
+        return {
+          reply: `I found "${matched.title}". Would you like me to mark it as completed?`,
+          action: {
+            actionId: crypto.randomUUID(),
+            type: 'complete_task',
+            parameters: {
+              taskId: (matched.id || matched._id).toString(),
+              title: matched.title,
+            },
+            status: 'pending_confirmation',
+          },
+        };
+      }
+    }
+
     // Pattern 4: Query queries (e.g., "What tasks are pending?", "How many hours did I study?")
     if (
       cleanMsg.includes('pending task') ||
@@ -255,6 +280,16 @@ class AIService {
           type: 'query_data',
           parameters: { query: cleanMsg },
         },
+      };
+    }
+
+    // Pattern 5: Manage Routine / Day assistance
+    if (cleanMsg.includes('manage') || cleanMsg.includes('what should i do') || cleanMsg.includes('help me')) {
+      const pendingCount = context.pendingTasks.length;
+      const todayBlocksCount = context.todayBlocks.length;
+      return {
+        reply: `You currently have ${pendingCount} pending task${pendingCount === 1 ? '' : 's'} and ${todayBlocksCount} timetable block${todayBlocksCount === 1 ? '' : 's'} scheduled for today.\n\nYou can ask me to:\n• "Add task [name] for [duration]"\n• "Create my timetable for today"\n• "Reschedule my [session] to [time]"\n• "What tasks are pending?"\n\nWhat would you like me to organize for you right now?`,
+        action: null,
       };
     }
 
@@ -313,8 +348,8 @@ class AIService {
     let fixedEndTime = null;
 
     if (str.includes('urgent') || str.includes('critical')) priority = 'urgent';
-    else if (str.includes('high priority')) priority = 'high';
-    else if (str.includes('low priority')) priority = 'low';
+    else if (str.includes('high priority') || str.includes('priority high')) priority = 'high';
+    else if (str.includes('low priority') || str.includes('priority low')) priority = 'low';
 
     const durMatch = str.match(/for\s+(\d+)\s*(hour|hr|minute|min)s?/i);
     if (durMatch) {
@@ -323,6 +358,11 @@ class AIService {
       duration = unit.startsWith('h') ? val * 60 : val;
       title = title.replace(durMatch[0], '').trim();
     }
+
+    // Clean up title from common prefixes and priority flags
+    title = title.replace(/^(?:a\s+|the\s+)?task\s*[:\-]?\s*/i, '').trim();
+    title = title.replace(/\b(?:urgent|critical|high priority|low priority|medium priority)\b/gi, '').trim();
+    if (!title) title = 'New Task';
 
     const collegeMatch = str.match(/(?:college|lecture|lab)\s+from\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s+to\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
     if (collegeMatch) {
@@ -339,15 +379,13 @@ class AIService {
    * Execute a user-confirmed action
    */
   async confirmAction(userId, actionId) {
-    const { data: convos } = await supabaseDb.client
-      .from('ai_conversations')
-      .select('*')
-      .eq('user_id', userId);
+    const convosResult = await supabaseDb.findMany('ai_conversations', { user_id: userId });
+    const convos = convosResult.data || [];
 
     let targetConvo = null;
     let targetAction = null;
 
-    for (const c of convos || []) {
+    for (const c of convos) {
       for (const m of c.messages || []) {
         if (m.action && m.action.actionId === actionId) {
           targetConvo = c;
@@ -381,15 +419,13 @@ class AIService {
    * Reject / Cancel a pending action
    */
   async rejectAction(userId, actionId) {
-    const { data: convos } = await supabaseDb.client
-      .from('ai_conversations')
-      .select('*')
-      .eq('user_id', userId);
+    const convosResult = await supabaseDb.findMany('ai_conversations', { user_id: userId });
+    const convos = convosResult.data || [];
 
     let targetConvo = null;
     let targetAction = null;
 
-    for (const c of convos || []) {
+    for (const c of convos) {
       for (const m of c.messages || []) {
         if (m.action && m.action.actionId === actionId) {
           targetConvo = c;
@@ -416,13 +452,13 @@ class AIService {
    * List past conversations
    */
   async getConversations(userId) {
-    const { data: convos } = await supabaseDb.client
-      .from('ai_conversations')
-      .select('id, title, created_at, updated_at')
-      .eq('user_id', userId)
-      .order('updated_at', { ascending: false });
-
-    return (convos || []).map(mapConvoToApi);
+    const convosResult = await supabaseDb.findMany(
+      'ai_conversations',
+      { user_id: userId },
+      { orderBy: 'updated_at', ascending: false }
+    );
+    const convos = convosResult.data || [];
+    return convos.map(mapConvoToApi);
   }
 
   /**
