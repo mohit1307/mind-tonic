@@ -7,7 +7,7 @@ export const scheduleService = {
   async getScheduleByDate(date) {
     const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
     const response = await api.get(`/schedule/${dateStr}`);
-    return response.data.schedule;
+    return response.data?.schedule || response.schedule || response.data || null;
   },
 
   /**
@@ -15,7 +15,7 @@ export const scheduleService = {
    */
   async generateSchedule(options = {}) {
     const response = await api.post('/schedule/generate', options);
-    return response.data.schedule;
+    return response.data?.schedule || response.schedule || response.data || null;
   },
 
   /**
@@ -24,7 +24,7 @@ export const scheduleService = {
   async updateSchedule(date, blocks) {
     const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
     const response = await api.put(`/schedule/${dateStr}`, { blocks });
-    return response.data.schedule;
+    return response.data?.schedule || response.schedule || response.data || null;
   },
 
   /**
@@ -33,7 +33,7 @@ export const scheduleService = {
   async updateBlock(date, blockId, updates) {
     const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
     const response = await api.patch(`/schedule/${dateStr}/block/${blockId}`, updates);
-    return response.data.schedule;
+    return response.data?.schedule || response.schedule || response.data || null;
   },
 
   /**
@@ -42,7 +42,7 @@ export const scheduleService = {
   async deleteBlock(date, blockId) {
     const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
     const response = await api.delete(`/schedule/${dateStr}/block/${blockId}`);
-    return response.data.schedule;
+    return response.data?.schedule || response.schedule || response.data || null;
   },
 
   /**
@@ -51,7 +51,7 @@ export const scheduleService = {
   async getWeekSchedule(startDate) {
     const dateStr = typeof startDate === 'string' ? startDate : startDate.toISOString().split('T')[0];
     const response = await api.get(`/schedule/week/${dateStr}`);
-    return response.data.schedules;
+    return response.data?.schedules || response.schedules || response.data || [];
   },
 
   /**

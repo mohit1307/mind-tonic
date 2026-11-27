@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import useAuth from '../../hooks/useAuth';
+import { useTaskContext } from '../../context/TaskContext';
 
 const ICON_MAP = {
   Home,
@@ -55,6 +56,17 @@ export default function Sidebar({
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  // Live Task Pending Counter
+  let pendingCount = 3;
+  try {
+    const taskContext = useTaskContext();
+    if (taskContext?.stats?.pending !== undefined) {
+      pendingCount = taskContext.stats.pending;
+    }
+  } catch {
+    // fallback
+  }
 
   const handleLogout = async () => {
     await logout();
@@ -136,9 +148,9 @@ export default function Sidebar({
                 <span className="truncate flex-1 tracking-wide">{item.name}</span>
               )}
 
-              {!collapsed && item.badgeCount && (
+              {!collapsed && (item.name === 'Tasks' ? pendingCount > 0 : Boolean(item.badgeCount)) && (
                 <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow-[0_0_10px_rgba(244,63,94,0.4)]">
-                  {item.badgeCount}
+                  {item.name === 'Tasks' ? pendingCount : item.badgeCount}
                 </span>
               )}
 

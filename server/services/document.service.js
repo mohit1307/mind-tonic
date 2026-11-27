@@ -20,6 +20,7 @@ function mapDocToApi(doc) {
     ocrStatus: doc.ocr_status || 'pending',
     ocrText: doc.ocr_text || '',
     ocrData: doc.ocr_data || {},
+    isLinkedToExpense: Boolean(doc.is_linked_to_expense),
     createdAt: doc.created_at,
     updatedAt: doc.updated_at,
   };
@@ -91,26 +92,43 @@ class DocumentService {
    * Get all user documents with optional category and search filters
    */
   async getDocuments(userId, { category, search, ocrStatus } = {}) {
-    let q = supabaseDb.client
-      .from('documents')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    try {
+      let q = supabaseDb.client
+        .from('documents')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-    if (category && category !== 'all') {
-      q = q.eq('category', category);
+      if (category && category !== 'all') {
+        q = q.eq('category', category);
+      }
+
+      if (ocrStatus) {
+        q = q.eq('ocr_status', ocrStatus);
+      }
+
+      if (search && search.trim()) {
+        q = q.or(`title.ilike.%${search.trim()}%,original_name.ilike.%${search.trim()}%`);
+      }
+
+      const { data: docs, error } = await q;
+      if (error) {
+        const fallback = supabaseDb._memoryFindMany('documents', { user_id: userId });
+        let list = fallback.data || [];
+        if (category && category !== 'all') {
+          list = list.filter((d) => d.category === category);
+        }
+        if (search && search.trim()) {
+          const s = search.trim().toLowerCase();
+          list = list.filter((d) => (d.title || '').toLowerCase().includes(s) || (d.original_name || '').toLowerCase().includes(s));
+        }
+        return list.map(mapDocToApi);
+      }
+      return (docs || []).map(mapDocToApi);
+    } catch (_err) {
+      const fallback = supabaseDb._memoryFindMany('documents', { user_id: userId });
+      return (fallback.data || []).map(mapDocToApi);
     }
-
-    if (ocrStatus) {
-      q = q.eq('ocr_status', ocrStatus);
-    }
-
-    if (search && search.trim()) {
-      q = q.or(`title.ilike.%${search.trim()}%,original_name.ilike.%${search.trim()}%`);
-    }
-
-    const { data: docs } = await q;
-    return (docs || []).map(mapDocToApi);
   }
 
   /**

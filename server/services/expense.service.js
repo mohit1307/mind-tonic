@@ -91,6 +91,11 @@ class ExpenseService {
     };
 
     const expense = await supabaseDb.insert('expenses', row);
+    try {
+      await supabaseDb.update('documents', { id: doc.id }, { is_linked_to_expense: true });
+    } catch (e) {
+      // Non-fatal if schema cache or column pending
+    }
     return mapExpenseToApi(expense, doc);
   }
 
@@ -98,40 +103,55 @@ class ExpenseService {
    * Get filtered expenses
    */
   async getExpenses(userId, { category, status, isCollegeFee, startDate, endDate, search, limit = 50 } = {}) {
-    let q = supabaseDb.client
-      .from('expenses')
-      .select('*, documents(id, title, original_name)')
-      .eq('user_id', userId)
-      .order('date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(Number(limit));
+    try {
+      let q = supabaseDb.client
+        .from('expenses')
+        .select('*, documents(id, title, original_name)')
+        .eq('user_id', userId)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(Number(limit));
 
-    if (category && category !== 'all') {
-      q = q.eq('category', category);
+      if (category && category !== 'all') {
+        q = q.eq('category', category);
+      }
+
+      if (status && status !== 'all') {
+        q = q.eq('status', status);
+      }
+
+      if (isCollegeFee !== undefined && isCollegeFee !== '') {
+        q = q.eq('is_college_fee', String(isCollegeFee) === 'true');
+      }
+
+      if (startDate) {
+        q = q.gte('date', new Date(startDate).toISOString().split('T')[0]);
+      }
+      if (endDate) {
+        q = q.lte('date', new Date(endDate).toISOString().split('T')[0]);
+      }
+
+      if (search && search.trim()) {
+        q = q.or(`title.ilike.%${search.trim()}%,notes.ilike.%${search.trim()}%`);
+      }
+
+      const { data: expenses, error } = await q;
+      if (error) {
+        const fallback = supabaseDb._memoryFindMany('expenses', { user_id: userId });
+        let list = fallback.data || [];
+        if (category && category !== 'all') list = list.filter((e) => e.category === category);
+        if (status && status !== 'all') list = list.filter((e) => e.status === status);
+        if (isCollegeFee !== undefined && isCollegeFee !== '') {
+          list = list.filter((e) => Boolean(e.is_college_fee) === (String(isCollegeFee) === 'true'));
+        }
+        return list.map((e) => mapExpenseToApi(e));
+      }
+
+      return (expenses || []).map((e) => mapExpenseToApi(e, e.documents));
+    } catch (_err) {
+      const fallback = supabaseDb._memoryFindMany('expenses', { user_id: userId });
+      return (fallback.data || []).map((e) => mapExpenseToApi(e));
     }
-
-    if (status && status !== 'all') {
-      q = q.eq('status', status);
-    }
-
-    if (isCollegeFee !== undefined && isCollegeFee !== '') {
-      q = q.eq('is_college_fee', String(isCollegeFee) === 'true');
-    }
-
-    if (startDate) {
-      q = q.gte('date', new Date(startDate).toISOString().split('T')[0]);
-    }
-    if (endDate) {
-      q = q.lte('date', new Date(endDate).toISOString().split('T')[0]);
-    }
-
-    if (search && search.trim()) {
-      q = q.or(`title.ilike.%${search.trim()}%,notes.ilike.%${search.trim()}%`);
-    }
-
-    const { data: expenses } = await q;
-
-    return (expenses || []).map((e) => mapExpenseToApi(e, e.documents));
   }
 
   /**
@@ -221,9 +241,18 @@ class ExpenseService {
         .limit(5),
     ]);
 
-    const monthExpenses = monthExpensesRes.data || [];
-    const allCollegeFees = allCollegeFeesRes.data || [];
-    const recentExpenses = (recentRes.data || []).map((e) => mapExpenseToApi(e, e.documents));
+    let monthExpenses = monthExpensesRes?.data || [];
+    let allCollegeFees = allCollegeFeesRes?.data || [];
+    let recentExpenses = (recentRes?.data || []).map((e) => mapExpenseToApi(e, e.documents));
+
+    if (monthExpensesRes?.error || allCollegeFeesRes?.error || (monthExpenses.length === 0 && allCollegeFees.length === 0)) {
+      const mem = supabaseDb._memoryFindMany('expenses', { user_id: userId }).data || [];
+      if (mem.length > 0) {
+        monthExpenses = mem;
+        allCollegeFees = mem.filter((e) => Boolean(e.is_college_fee));
+        recentExpenses = mem.slice(0, 5).map((e) => mapExpenseToApi(e));
+      }
+    }
 
     let totalSpentThisMonth = 0;
     const categoryTotals = {};

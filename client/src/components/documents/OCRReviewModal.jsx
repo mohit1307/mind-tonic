@@ -71,7 +71,7 @@ export default function OCRReviewModal({
 
     try {
       await onConfirmExpense({
-        documentId: document._id,
+        documentId: document._id || document.id,
         title: title.trim() || 'Verified Expense',
         amount: Number(amount),
         category,

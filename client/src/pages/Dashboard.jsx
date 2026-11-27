@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Calendar,
@@ -23,7 +23,7 @@ import {
   CheckSquare,
 } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
-import taskService from '../services/taskService';
+import useTasks from '../hooks/useTasks';
 import scheduleService from '../services/scheduleService';
 import habitService from '../services/habitService';
 import aiService from '../services/aiService';
@@ -199,6 +199,46 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // ── Global Tasks Context (Fully Synced Across Dashboard, Tasks & Routine) ───
+  const {
+    tasks: allTasks,
+    stats: taskStats,
+    toggleComplete,
+    createTask,
+  } = useTasks();
+
+  // Derive pending tasks reactively from global state
+  const pendingTasks = useMemo(() => {
+    const list = allTasks.filter((t) => t.status !== 'completed');
+    if (list.length === 0 && allTasks.length === 0) {
+      return [
+        { id: 't-1', title: 'Complete DSA Practice', priority: 'High', due: 'Today', completed: false },
+        { id: 't-2', title: 'Revise Java Generics', priority: 'Medium', due: 'Today', completed: false },
+        { id: 't-3', title: 'Prepare for Placement Drive', priority: 'Low', due: 'Tomorrow', completed: false },
+      ];
+    }
+    return list.slice(0, 4).map((t) => ({
+      id: t.id || t._id,
+      title: t.title,
+      priority:
+        t.priority === 'urgent'
+          ? 'High'
+          : t.priority === 'high'
+          ? 'High'
+          : t.priority === 'medium'
+          ? 'Medium'
+          : 'Low',
+      due: t.deadline
+        ? new Date(t.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : 'Today',
+      completed: t.status === 'completed',
+    }));
+  }, [allTasks]);
+
+  // Derived real-time task metrics
+  const totalTasksCount = taskStats?.total || allTasks.length || 12;
+  const completedTasksCount = taskStats?.completed !== undefined ? taskStats.completed : 8;
+
   // ── States ─────────────────────────────────────────────────────────
   const [stats, setStats] = useState({
     total: 12,
@@ -252,30 +292,6 @@ export default function Dashboard() {
     },
   ]);
 
-  const [pendingTasks, setPendingTasks] = useState([
-    {
-      id: 't-1',
-      title: 'Complete DSA Practice',
-      priority: 'High',
-      due: 'Today',
-      completed: false,
-    },
-    {
-      id: 't-2',
-      title: 'Revise Java Generics',
-      priority: 'Medium',
-      due: 'Today',
-      completed: false,
-    },
-    {
-      id: 't-3',
-      title: 'Prepare for Placement Drive',
-      priority: 'Low',
-      due: 'Tomorrow',
-      completed: false,
-    },
-  ]);
-
   const [newTaskInput, setNewTaskInput] = useState('');
   const [showAddTask, setShowAddTask] = useState(false);
 
@@ -300,33 +316,13 @@ export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState(29);
   const [currentMonthYear, setCurrentMonthYear] = useState('November 2025');
 
-  // Load live data from services
+  // Load live habit data from services
   useEffect(() => {
     async function loadData() {
       try {
-        const [taskData, habitData] = await Promise.allSettled([
-          taskService.getTasks({ limit: 10 }),
-          habitService.getHabits(),
-        ]);
-
-        if (taskData.status === 'fulfilled' && taskData.value?.tasks?.length > 0) {
-          const livePending = taskData.value.tasks
-            .filter((t) => t.status !== 'completed')
-            .slice(0, 3)
-            .map((t) => ({
-              id: t.id || t._id,
-              title: t.title,
-              priority: t.priority === 'urgent' ? 'High' : t.priority === 'high' ? 'High' : t.priority === 'medium' ? 'Medium' : 'Low',
-              due: t.deadline ? new Date(t.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Today',
-              completed: false,
-            }));
-          if (livePending.length > 0) {
-            setPendingTasks(livePending);
-          }
-        }
-
-        if (habitData.status === 'fulfilled' && habitData.value?.length > 0) {
-          const liveHabits = habitData.value.slice(0, 3).map((h, idx) => ({
+        const habitData = await habitService.getHabits().catch(() => null);
+        if (habitData && Array.isArray(habitData) && habitData.length > 0) {
+          const liveHabits = habitData.slice(0, 3).map((h, idx) => ({
             id: h.id || `h-${idx}`,
             label: h.name,
             percentage: h.streakCount > 0 ? Math.min(100, h.streakCount * 20) : 60,
@@ -337,7 +333,7 @@ export default function Dashboard() {
           }
         }
       } catch (err) {
-        console.warn('Dashboard service loading fallback:', err);
+        console.warn('Dashboard habit loading fallback:', err);
       }
     }
     loadData();
@@ -363,50 +359,32 @@ export default function Dashboard() {
     );
   };
 
-  // Toggle Pending Task Completion
+  // Toggle Pending Task Completion - Updates Globally Across Website
   const handleToggleTask = async (taskId) => {
-    setPendingTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, completed: !t.completed } : t))
-    );
-    setStats((prev) => ({
-      ...prev,
-      completed: prev.completed + 1,
-      pending: Math.max(0, prev.pending - 1),
-    }));
-
     try {
-      if (typeof taskService.toggleComplete === 'function') {
-        await taskService.toggleComplete(taskId);
-      }
+      await toggleComplete(taskId);
     } catch (e) {
-      // In-memory update already applied
+      console.warn('Task toggle error:', e);
     }
   };
 
-  // Quick Add Task
-  const handleQuickAddTask = (e) => {
+  // Quick Add Task - Updates Globally Across Website
+  const handleQuickAddTask = async (e) => {
     e.preventDefault();
     if (!newTaskInput.trim()) return;
-    const newTask = {
-      id: `task-${Date.now()}`,
-      title: newTaskInput.trim(),
-      priority: 'Medium',
-      due: 'Today',
-      completed: false,
-    };
-    setPendingTasks([newTask, ...pendingTasks]);
-    setStats((prev) => ({ ...prev, total: prev.total + 1, pending: prev.pending + 1 }));
+    const title = newTaskInput.trim();
     setNewTaskInput('');
     setShowAddTask(false);
 
     try {
-      taskService.createTask({
-        title: newTask.title,
+      await createTask({
+        title,
         priority: 'medium',
+        category: 'study',
         deadline: new Date().toISOString(),
       });
     } catch (err) {
-      // Handled
+      console.warn('Quick add task error:', err);
     }
   };
 
@@ -522,7 +500,7 @@ export default function Dashboard() {
 
           <div className="mt-4">
             <div className="text-3xl font-extrabold text-white tracking-tight">
-              {stats.total}
+              {totalTasksCount}
             </div>
             <div className="text-xs font-medium text-slate-400 mt-0.5">
               Total Tasks
@@ -551,7 +529,7 @@ export default function Dashboard() {
 
           <div className="mt-4">
             <div className="text-3xl font-extrabold text-white tracking-tight">
-              {stats.completed}
+              {completedTasksCount}
             </div>
             <div className="text-xs font-medium text-slate-400 mt-0.5">
               Completed

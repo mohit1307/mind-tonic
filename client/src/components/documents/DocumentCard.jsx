@@ -83,7 +83,7 @@ export default function DocumentCard({
 
         <div className="flex items-center gap-1">
           <button
-            onClick={() => onDelete(document._id)}
+            onClick={() => onDelete(document._id || document.id)}
             className="p-1.5 rounded-xl text-slate-500 hover:text-danger-400 hover:bg-danger-500/10 transition-colors opacity-0 group-hover:opacity-100"
             title="Delete Document"
           >

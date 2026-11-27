@@ -71,7 +71,7 @@ export default function Expenses() {
 
   const handleTogglePaid = async (exp) => {
     const newStatus = exp.status === 'paid' ? 'pending' : 'paid';
-    await updateExpense(exp._id, { status: newStatus });
+    await updateExpense(exp._id || exp.id, { status: newStatus });
   };
 
   return (
@@ -197,7 +197,7 @@ export default function Expenses() {
             <div className="space-y-2.5">
               {expenses.map((exp) => (
                 <div
-                  key={exp._id}
+                  key={exp._id || exp.id}
                   className="p-4 rounded-2xl bg-surface/80 border border-white/5 hover:border-white/15 transition-all flex items-center justify-between gap-4 group"
                 >
                   <div className="flex items-center gap-3.5 flex-1 min-w-0">
@@ -251,7 +251,7 @@ export default function Expenses() {
                       </button>
 
                       <button
-                        onClick={() => deleteExpense(exp._id)}
+                        onClick={() => deleteExpense(exp._id || exp.id)}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-danger-400 hover:bg-danger-500/10 transition-colors opacity-0 group-hover:opacity-100"
                         title="Delete Expense"
                       >
@@ -299,7 +299,7 @@ export default function Expenses() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {collegeExpenses.map((fee) => (
-                <Card key={fee._id} className="p-5 border space-y-3">
+                <Card key={fee._id || fee.id} className="p-5 border space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
                       <span className="text-2xs uppercase tracking-wider font-semibold text-accent-400">

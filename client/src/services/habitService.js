@@ -6,7 +6,7 @@ export const habitService = {
    */
   async getHabits() {
     const response = await api.get('/habits');
-    return response.data.habits;
+    return response.data?.habits || response.habits || (Array.isArray(response.data) ? response.data : []) || [];
   },
 
   /**
@@ -14,7 +14,7 @@ export const habitService = {
    */
   async getHabitById(id) {
     const response = await api.get(`/habits/${id}`);
-    return response.data;
+    return response.data?.habit || response.habit || response.data;
   },
 
   /**
@@ -22,7 +22,7 @@ export const habitService = {
    */
   async createHabit(habitData) {
     const response = await api.post('/habits', habitData);
-    return response.data.habit;
+    return response.data?.habit || response.habit || response.data;
   },
 
   /**
@@ -30,7 +30,7 @@ export const habitService = {
    */
   async updateHabit(id, updates) {
     const response = await api.put(`/habits/${id}`, updates);
-    return response.data.habit;
+    return response.data?.habit || response.habit || response.data;
   },
 
   /**

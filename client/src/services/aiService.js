@@ -30,7 +30,7 @@ export const aiService = {
    */
   async getConversations() {
     const response = await api.get('/ai/conversations');
-    return response.data.conversations;
+    return response.data?.conversations || response.conversations || (Array.isArray(response.data) ? response.data : []) || [];
   },
 
   /**
@@ -38,7 +38,7 @@ export const aiService = {
    */
   async getConversation(id) {
     const response = await api.get(`/ai/conversations/${id}`);
-    return response.data.conversation;
+    return response.data?.conversation || response.conversation || response.data || null;
   },
 
   /**
