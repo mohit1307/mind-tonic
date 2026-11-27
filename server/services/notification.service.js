@@ -99,6 +99,25 @@ class NotificationService {
 
     return { markedCount: updated?.length || 0 };
   }
+
+  /**
+   * Delete a notification
+   */
+  async deleteNotification(userId, notificationId) {
+    await supabaseDb.delete('notifications', {
+      id: notificationId,
+      user_id: userId,
+    });
+    return { message: 'Notification deleted' };
+  }
+
+  /**
+   * Clear all notifications for user
+   */
+  async clearAll(userId) {
+    await supabaseDb.delete('notifications', { user_id: userId });
+    return { message: 'All notifications cleared' };
+  }
 }
 
 module.exports = new NotificationService();
